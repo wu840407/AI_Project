@@ -1,7 +1,4 @@
-import os
-
-# 定義 README 的內容
-readme_content = """# 🏺 YaYan-AI (雅言)
+# 🏺 YaYan-AI (雅言)
 
 ![Python](https://img.shields.io/badge/Python-3.10-blue)
 ![GPU](https://img.shields.io/badge/GPU-RTX%203090-green)
@@ -53,36 +50,42 @@ Designed to run efficiently on a single **NVIDIA RTX 3090 (24GB)** using 4-bit q
 ## 📦 Installation (安裝步驟)
 
 ### 1. Clone Repository (下載專案)
-    ```bash
+    ```
     git clone [https://github.com/YourUsername/YaYan-AI.git](https://github.com/YourUsername/YaYan-AI.git)
     cd YaYan-AI
+    mkdir -p models_cache input_audio output_text
     ```
 ### 2. Create Environment (建立環境)
-    ```bash
+    ```
     conda create -n dialect_env python=3.10 -y
     conda activate dialect_env
     ```
 ### 3. Install PyTorch (安裝 PyTorch)
-    
+    ```
     pip install torch torchvision torchaudio --index-url [https://download.pytorch.org/whl/cu121](https://download.pytorch.org/whl/cu121)
-    ``` 
+    ```
 ### 4. Install Dependencies (安裝核心套件)
-    ```bash
+    ```
     pip install transformers accelerate bitsandbytes peft gradio librosa scipy soundfile protobuf sentencepiece
     ```
 ## ▶️ Usage (使用方法)
 ### 1. Start the System (啟動系統)
-    ```bash
+    ```
     conda activate dialect_env
     python app.py
-    Note: The first run will automatically download models (~15GB). Please wait. 注意： 首次執行將自動下載模型（約 15GB），請耐心等待進度條跑完。
     ```
-
+    Note: The first run will automatically download models (~15GB). Please wait. 注意： 首次執行將自動下載模型（約 15GB），請耐心等待進度條跑完。
+    
 ### 2. Open Web UI (開啟介面)
     Once the terminal shows the URL, open your browser and visit: 當終端機顯示網址後，請打開瀏覽器輸入：
 
     http://localhost:7860
 
+### 3. Batch Processing (批次處理)
+    Automatically process all files in input_audio/. 自動轉換 input_audio 資料夾內所有音檔。
+    ```
+    python auto_batch.py
+    ```
 ## 🏗️ Technical Stack (技術架構)
     
     ASR Model: openai/whisper-large-v3

@@ -1,3 +1,12 @@
+import os
+import sys
+
+# ==========================================
+# 0. 強制設定模型路徑 (一定要在 import torch 之前)
+# ==========================================
+# 設定 Hugging Face 模型快取路徑為當前專案底下的 models_cache
+os.environ["HF_HOME"] = os.path.abspath("./models_cache")
+
 import torch
 import gradio as gr
 from transformers import (
@@ -6,16 +15,16 @@ from transformers import (
     pipeline, 
     BitsAndBytesConfig
 )
-import numpy as np
 
-# --- 設定：利用 RTX 3090 ---
+# --- 硬體檢查 ---
 device = "cuda" if torch.cuda.is_available() else "cpu"
-print(f"正在使用裝置: {device} (預期應為 cuda)")
+print(f"🚀 系統啟動中... 使用裝置: {device}")
+print(f"📂 模型儲存路徑: {os.environ['HF_HOME']}")
 
 # ==========================================
 # 1. 載入 ASR 模型 (Whisper-Large-v3)
 # ==========================================
-print("正在載入 Whisper-Large-v3 (語音識別)...")
+print("⏳ 正在載入 Whisper-Large-v3 (語音識別)...")
 asr_pipe = pipeline(
     "automatic-speech-recognition",
     model="openai/whisper-large-v3",
@@ -26,11 +35,11 @@ asr_pipe = pipeline(
 # ==========================================
 # 2. 載入 LLM 模型 (Qwen2.5-7B)
 # ==========================================
-print("正在載入 Qwen2.5-7B (翻譯與潤飾)...")
+print("⏳ 正在載入 Qwen2.5-7B (翻譯與潤飾)...")
 
 llm_model_id = "Qwen/Qwen2.5-7B-Instruct"
 
-# 4-bit 量化配置
+# 4-bit 量化配置 (3090 省顯存關鍵)
 bnb_config = BitsAndBytesConfig(
     load_in_4bit=True,
     bnb_4bit_quant_type="nf4",
@@ -52,32 +61,38 @@ def process_audio(audio_path, source_dialect, target_style):
     if audio_path is None:
         return "請先錄音或上傳檔案！", ""
 
-    print(f"正在處理音訊: {audio_path}")
+    print(f"🎤 收到音訊: {audio_path} | 來源: {source_dialect}")
     
-    # Whisper 推論
-    asr_result = asr_pipe(
-        audio_path, 
-        generate_kwargs={"language": "chinese"} 
-    )
-    raw_text = asr_result["text"]
-    print(f"Whisper 原始識別結果: {raw_text}")
+    # --- 步驟 A: ASR 識別 ---
+    # 對於維吾爾語，我們可以嘗試讓 whisper 自動偵測，或是強制指定 "ug"
+    # 但為了通用性，這裡使用自動偵測模式 (task="transcribe")
+    try:
+        asr_result = asr_pipe(
+            audio_path, 
+            generate_kwargs={"task": "transcribe"},
+            return_timestamps=True
+        )
+        raw_text = asr_result["text"]
+        print(f"📝 Whisper 識別結果: {raw_text}")
+    except Exception as e:
+        return f"識別錯誤: {str(e)}", ""
 
-    # LLM 翻譯/潤飾
+    # --- 步驟 B: LLM 翻譯/潤飾 ---
     system_instruction = f"""
     你是由「雅言 (YaYan-AI)」專案開發的方言轉換專家。
     
     你的核心任務是：
-    1. 接收使用者的方言口語輸入（原文是「{source_dialect}」）。
+    1. 接收使用者的語音識別文字，原文語言是「{source_dialect}」。
     2. 理解其語意，並將其精確轉換為優雅、標準的「{target_style}」。
-    3. 修正語音識別可能產生的同音錯字或贅字。
+    3. 如果原文是維吾爾語，請將其翻譯為流暢的正體中文。
+    4. 修正語音識別可能產生的同音錯字或贅字。
     
-    請注意：你是為了文化傳承與溝通效率而生，輸出必須精準、流暢且符合正體中文規範。
-    直接輸出轉換結果即可，不需要自我介紹，除非使用者特別問你的名字。
+    請注意：輸出必須精準、流暢且符合正體中文規範。直接輸出轉換結果即可。
     """
 
     messages = [
         {"role": "system", "content": system_instruction},
-        {"role": "user", "content": f"ASR原始文字：{raw_text}"}
+        {"role": "user", "content": f"語音識別原文：{raw_text}"}
     ]
 
     text_input = tokenizer.apply_chat_template(
@@ -88,7 +103,7 @@ def process_audio(audio_path, source_dialect, target_style):
 
     generated_ids = llm_model.generate(
         model_inputs.input_ids,
-        max_new_tokens=512,
+        max_new_tokens=1024,
         temperature=0.3,
     )
     
@@ -103,14 +118,18 @@ def process_audio(audio_path, source_dialect, target_style):
 # ==========================================
 # 4. 建立 Gradio 介面
 # ==========================================
-with gr.Blocks(title="3090 方言語音轉換系統") as demo:
-    gr.Markdown("# 🎙️ 跨方言語音轉正體中文原型機 (RTX 3090)")
+with gr.Blocks(title="YaYan-AI 雅言系統") as demo:
+    gr.Markdown("# 🏺 YaYan-AI (雅言) - 本地化方言轉換系統")
+    gr.Markdown("基於 RTX 3090 | Whisper-Large-v3 | Qwen-2.5-7B")
     
     with gr.Row():
         with gr.Column(scale=1):
-            audio_input = gr.Audio(sources=["microphone", "upload"], type="filepath", label="請按此說話")
+            # 錄音輸入
+            audio_input = gr.Audio(sources=["microphone", "upload"], type="filepath", label="請按此說話或上傳檔案")
+            
+            # 選項 (已新增維吾爾語)
             dialect_dropdown = gr.Dropdown(
-                choices=["台灣口語/台灣國語", "廣東話 (粵語)", "四川話", "上海話"], 
+                choices=["台灣口語/台灣國語", "廣東話 (粵語)", "四川話", "上海話", "維吾爾語", "其他方言"], 
                 value="台灣口語/台灣國語", 
                 label="輸入語言 (來源)"
             )
@@ -119,12 +138,15 @@ with gr.Blocks(title="3090 方言語音轉換系統") as demo:
                 value="標準新聞書面語 (正體)", 
                 label="輸出風格"
             )
+            
             submit_btn = gr.Button("開始轉換 🚀", variant="primary")
 
         with gr.Column(scale=1):
-            raw_text_output = gr.Textbox(label="Whisper 聽到的 (原始識別)", lines=3, interactive=False)
-            final_text_output = gr.Textbox(label="LLM 修正後的 (最終結果)", lines=5, interactive=False, show_copy_button=True)
+            # 輸出區
+            raw_text_output = gr.Textbox(label="Whisper 原始識別", lines=3, interactive=False)
+            final_text_output = gr.Textbox(label="雅言 AI 轉換結果", lines=5, interactive=False)
 
+    # 綁定事件
     submit_btn.click(
         fn=process_audio,
         inputs=[audio_input, dialect_dropdown, style_dropdown],
