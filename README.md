@@ -97,4 +97,4 @@ Automatically process all files in input_audio/. 自動轉換 input_audio 資料
     Interface: Gradio
 
 ## 📝 License
-    This project is open-source and available under the MIT License. """
+    This project is open-source and available under the MIT License. 

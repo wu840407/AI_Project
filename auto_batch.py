@@ -10,6 +10,9 @@ import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline, BitsAndBytesConfig
 from tqdm import tqdm
 import time
+import librosa # 確保開頭有 import 這個庫 (原本環境應該已安裝)
+import soundfile as sf
+import numpy as np
 
 # --- 設定輸入與輸出資料夾 ---
 INPUT_FOLDER = "./input_audio"
@@ -56,13 +59,30 @@ def process_single_file(file_path, output_path):
     start_time = time.time()
     filename = os.path.basename(file_path)
     
-    # --- A. Whisper 自動識別 ---
-    # 我們不指定 language，讓 Whisper 自己猜 (它支援 auto detect)
-    # return_timestamps=True 讓它處理長音檔更穩定
+    print(f"🔄 正在優化電話音訊: {filename} ...")
+
+    # --- A. 前處理：針對 PSTN/VoIP 優化 ---
+    # 1. 使用 librosa 讀取，並強制轉為 16000Hz (Whisper 的原生頻率)
+    # y 是音訊數據, sr 是取樣率
     try:
+        y, sr = librosa.load(file_path, sr=16000)
+    except Exception as e:
+        print(f"❌ 讀取失敗: {filename}, 錯誤: {e}")
+        return
+
+    # 2. 簡單的正規化 (Normalization) - 讓小聲的電話錄音變大聲
+    if np.max(np.abs(y)) > 0:
+        y = y / np.max(np.abs(y))
+
+    # 3. 為了讓 pipeline 讀取，我們需要傳遞 numpy array 或者暫存檔
+    # 這裡我們直接把優化後的聲音傳給 Whisper，不存暫存檔以求速度
+    
+    # --- B. Whisper 自動識別 ---
+    try:
+        # pipeline 可以直接吃 numpy array (需要給 sampling_rate)
         asr_output = asr_pipe(
-            file_path, 
-            generate_kwargs={"task": "transcribe"}, # transcribe = 轉錄原文
+            {"raw": y, "sampling_rate": 16000}, 
+            generate_kwargs={"task": "transcribe"},
             return_timestamps=True
         )
         raw_text = asr_output["text"]
@@ -70,16 +90,15 @@ def process_single_file(file_path, output_path):
         print(f"❌ Whisper 識別失敗: {filename}, 錯誤: {e}")
         return
 
-    # --- B. LLM 翻譯與方言識別 ---
-    # 這裡的 Prompt 是關鍵，我們讓 Qwen 自己去判斷原文是哪種方言
+    # --- C. LLM 翻譯與方言識別 (這段不用改，維持原樣) ---
     system_prompt = """
     你是一位精通漢語方言（四川話、上海話、廣東話、閩南語）以及維吾爾語的語言學家。
+    使用者的輸入是一段語音識別（ASR）後的文字，來源是電話錄音（可能包含雜訊或模糊發音）。
     
-    使用者的輸入是一段語音識別（ASR）後的文字。
     你的任務是：
     1. 【判斷語言】：分析這段文字屬於哪種語言或方言。
     2. 【翻譯】：將其準確翻譯為「標準正體中文」。
-    3. 【輸出格式】：請嚴格依照下方格式輸出，不要有多餘廢話。
+    3. 【修正】：電話錄音常將「四」聽成「十」、「發」聽成「花」，請根據語境修正。
     
     格式範例：
     [語言]: 四川話
@@ -89,29 +108,25 @@ def process_single_file(file_path, output_path):
 
     messages = [
         {"role": "system", "content": system_prompt},
-        {"role": "user", "content": f"請處理這段識別文字：\n{raw_text}"}
+        {"role": "user", "content": f"請處理這段電話識別文字：\n{raw_text}"}
     ]
 
     text_input = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
     model_inputs = tokenizer([text_input], return_tensors="pt").to(device)
 
-    # 產生翻譯
     with torch.no_grad():
         generated_ids = llm_model.generate(
             model_inputs.input_ids,
             max_new_tokens=1024,
-            temperature=0.3 # 翻譯需要準確度，溫度調低
+            temperature=0.3
         )
     
     final_output = tokenizer.batch_decode(generated_ids, skip_special_tokens=True)[0]
     
-    # 移除 Prompt 部分，只保留 AI 回答 (Qwen有時會包含 prompt，視版本而定，通常 skip_special_tokens 就夠了，這裡做字串處理保險)
-    # 這裡假設 Qwen 直接輸出回答。若有包含 input，通常在 tokenizer decode 時會處理，或是用 output_ids[len(input_ids):] 切割
-    # 為了程式碼簡潔，這裡使用簡單的切割法（如果模型輸出了 prompt）
-    if "請處理這段識別文字" in final_output:
-         final_output = final_output.split("請處理這段識別文字：")[-1].strip()
+    if "請處理這段電話識別文字" in final_output:
+         final_output = final_output.split("請處理這段電話識別文字：")[-1].strip()
 
-    # --- C. 存檔 ---
+    # --- D. 存檔 ---
     with open(output_path, "w", encoding="utf-8") as f:
         f.write(final_output)
 
