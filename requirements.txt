@@ -1,0 +1,23 @@
+# 核心 AI 框架 (Core AI)
+torch>=2.1.0
+torchaudio>=2.1.0
+torchvision
+
+# Hugging Face 生態系 (Models & Quantization)
+transformers>=4.40.0
+accelerate>=0.27.0
+bitsandbytes>=0.41.0
+huggingface_hub>=0.20.0
+
+# 網頁介面 (Web UI)
+gradio>=4.0.0
+
+# 音訊處理 (Audio Processing)
+librosa>=0.10.0
+soundfile>=0.12.0
+numpy
+scipy
+
+# 工具 (Utilities)
+tqdm
+requests
