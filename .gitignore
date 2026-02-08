@@ -1,20 +1,28 @@
-# --- AI 模型 (絕對不能上傳) ---
-models_cache/
-*.pt
-*.bin
-*.safetensors
-*.engine
-*.onnx
-
-# --- 測試資料 (隱私考量，不上傳) ---
-input_audio/
-output_text/
-
-# --- Python 暫存檔 (垃圾檔案) ---
+# --- Python 基本忽略 ---
 __pycache__/
 *.pyc
-.ipynb_checkpoints/
+*.pyo
+*.pyd
+.Python
+env/
+venv/
 .env
 
-# --- VS Code 設定 (選用，通常不傳) ---
+# --- AI 模型與大檔案 (絕對不要上傳！) ---
+*.pt
+*.pth
+*.bin
+*.safetensors
+*.onnx
+*.gguf
+/models/
+/data/
+output/
+result/
+*.wav
+*.mp3
+*.log
+
+# --- IDE 設定檔 ---
 .vscode/
+.idea/
