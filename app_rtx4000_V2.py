@@ -201,7 +201,7 @@ def process_audio(audio_path, source_dialect, analysis_mode):
         temperature=0.3,
         pad_token_id=tokenizer.eos_token_id
     )
-    response = tokenizer.batch_decode(generated_ids[0][len(model_inputs.input_ids[0]):], skip_special_tokens=True)
+    response = tokenizer.decode(generated_ids[0][len(model_inputs.input_ids[0]):], skip_special_tokens=True)
     
     return confidence_html, full_raw_text, response
 

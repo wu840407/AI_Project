@@ -1,58 +1,60 @@
 # 🏺 YaYan-AI (雅言) - Cross-Architecture Dialect Intelligence
 
 ![Python](https://img.shields.io/badge/Python-3.10-blue)
-![Architecture](https://img.shields.io/badge/Architecture-Hybrid%20(Edge%2FServer)-purple)
+![Architecture](https://img.shields.io/badge/Architecture-Dual%20RTX%204000-purple)
 ![License](https://img.shields.io/badge/License-MIT-orange)
 
-> **Scalable Local Dialect Intelligence System | 從工作站到伺服器的全本地化方言情報系統**
+> **Scalable Local Dialect Intelligence System**
+> **從單兵工作站到戰情伺服器的全本地化方言情報系統**
+
+---
 
 ## 📖 Introduction (專案簡介)
 
 **[English]**
-**YaYan-AI** is a privacy-first, offline AI system designed to convert dialectal speech (e.g., Taiwanese, Cantonese, Uyghur) into standard Traditional Chinese intelligence reports. 
-This project features a **cross-architecture design**, seamlessly supporting both consumer-grade workstations (RTX 3090) and enterprise-grade servers (Dual RTX 4000), ensuring flexibility across different deployment scenarios.
+**YaYan-AI** is a privacy-first, offline AI system designed to convert dialectal speech (e.g., Taiwanese, Sichuanese, Cantonese) into standard Traditional Chinese intelligence reports.
+Version 2.1 introduces a **Dual-GPU Pipeline**, utilizing two NVIDIA RTX 4000 Ada GPUs to separate ASR (Hearing) and LLM (Reasoning) tasks, resolving memory bottlenecks and increasing throughput.
 
 **[中文]**
-**雅言 (YaYan-AI)** 是一套基於本地化部署的 AI 情報系統，致力於將多種方言（如台灣口語、粵語、維吾爾語）轉化為標準的「雅言」（正體中文情報摘要）。
-本專案採用**跨架構設計**，同時支援單卡工作站（RTX 3090）與企業級伺服器（Dual RTX 4000），實現從原型開發到大規模情報分析的無縫遷移。
+**雅言 (YaYan-AI)** 是一套基於本地化部署的 AI 情報系統，致力於將多種方言（如台灣口語、四川話、粵語）轉化為標準的「雅言」（正體中文情報摘要）。
+V2.1 版本引入 **雙顯卡平行管線 (Dual-GPU Pipeline)**，利用兩張 RTX 4000 分別處理「聽」與「想」，徹底解決了 VRAM 溢出 (OOM) 問題並大幅提升處理速度。
 
 ---
 
-## 🌟 Architecture & Versions (版本與架構)
+## 🌟 Architecture Evolution (架構演進)
 
-This repository maintains specialized configurations for different hardware environments.
+This repository maintains configurations for different hardware scales.
 本專案針對不同硬體規模提供優化配置：
 
-| Feature | **v1: Workstation Edition** | **v2: Server Edition** |
+| Feature (功能) | **v1: Workstation (單兵版)** | **v2.1: Server (戰情版)** |
 | :--- | :--- | :--- |
-| **Use Case** | Prototyping / Edge Inference | **Massive Batch Processing** |
-| **GPU Config** | **1x NVIDIA RTX 3090** (24GB) | **2x NVIDIA RTX 4000 Ada** (20GB x2) |
-| **Strategy** | Serial Processing (序列處理) | **Pipeline Parallelism (平行管線)** |
-| **ASR Model** | Whisper-Large-v3 | Whisper-Large-v3 (Run on GPU 0) |
-| **LLM Model** | Qwen-2.5-7B (4-bit) | **Meta-Llama-3.1-8B** (Run on GPU 1) |
-| **Storage** | Local SSD | **RAID 10 NVMe Array (/data)** |
-| **OS** | Windows 10/11 (WSL2) | **Ubuntu Server 24.04 LTS** |
+| **Use Case (定位)** | Prototyping / Edge Inference<br>原型開發 / 邊緣運算 | **Massive Batch Processing<br>大規模戰情分析** |
+| **GPU Config (硬體)** | **1x NVIDIA RTX 3090** (24GB) | **2x NVIDIA RTX 4000 Ada** (20GB x2) |
+| **Strategy (策略)** | Serial Processing (序列處理) | **Pipeline Parallelism (平行管線)** |
+| **ASR (聽覺)** | Whisper-Large-v3 | **GPU 0:** Whisper-Large-v3 + Pyannote |
+| **LLM (大腦)** | Qwen-2.5-7B (4-bit) | **GPU 1:** Llama-3.1-8B-Instruct (4-bit) |
+| **Dialect (方言)** | Basic Prompting | **Advanced Dialect Dashboard (多方言儀表板)** |
+| **OS (系統)** | Windows 10/11 (WSL2) | **Ubuntu Server 22.04 / 24.04** |
 
 ---
 
-## 🚀 Key Features (核心功能)
+## 🚀 Key Features (核心功能 V2.1)
 
-* **🎙️ Military-Grade ASR (高精度聽寫)**
-    * Deploys `whisper-large-v3` locally to handle diverse acoustic environments (PSTN/VoIP).
-    * 本地部署最新 Whisper 模型，針對電話錄音優化，精準捕捉方言發音。
+### 1. 🗣️ Multi-Dialect Dashboard (多方言戰情儀表板)
+* **EN:** New dropdown menu supports **Taiwanese (Hokkien), Sichuanese, Cantonese, Shanghainese, and Shandong dialect**. Uses advanced prompt engineering to fix homophone errors (e.g., fixing Sichuanese "empty ear" errors).
+* **TW:** 新增方言切換面板，支援**台語、四川話、粵語、上海話、山東話**。透過 Llama 3.1 的方言指令庫，自動修復 Whisper 的同音字錯誤（如修復四川話的空耳現象）。
 
-* **🧠 Strategic Intelligence Analysis (戰略情報分析)**
-    * **Server Edition:** Utilizes **Llama-3.1-8B** for deep reasoning, dialect translation, and intent analysis.
-    * **Workstation Edition:** Uses **Qwen-2.5-7B** for efficient translation and correction.
-    * 具備方言轉正、語意修正及情報摘要生成能力。
+### 2. 🛡️ Dual-GPU Optimization (雙卡平行優化)
+* **EN:** Solved `CUDA OutOfMemory` issues by dedicating **GPU 0 for ASR** (Whisper + Pyannote) and **GPU 1 for LLM** (Llama 3.1).
+* **TW:** 透過硬體分流，將「聽寫」交給第一張顯卡，「思考」交給第二張顯卡，完美解決單卡記憶體不足的崩潰問題，實現流水線式處理。
 
-* **🛡️ Air-Gapped Security (物理隔離安全)**
-    * Supports fully offline execution. No data leaves your server.
-    * 支援**完全離線模式**，模型權重可預先下載至本地硬碟，適合機密敏感環境。
+### 3. 📊 Confidence Scoring (信心指數可視化)
+* **EN:** Real-time LogProb calculation displays AI transcription confidence (Green/Orange/Red indicators), helping analysts judge data reliability.
+* **TW:** 實時計算 AI 聽寫的信心水準（LogProb），並以紅/黃/綠燈號顯示，輔助情報官快速判斷逐字稿的可信度。
 
-* **⚡ Pipeline Parallelism (雙卡平行加速)**
-    * *Server Edition Only*: Distributes ASR (Hearing) and LLM (Reasoning) tasks across separate GPUs.
-    * 伺服器版實作「聽」與「想」的硬體分流，大幅提升批次處理吞吐量。
+### 4. 🧠 Strategic Analysis Modes (戰略研判模式)
+* **EN:** Includes three specialized modes: **Summary**, **Strategic Intent Analysis**, and **Game Theory Suggestions**.
+* **TW:** 內建三種戰術分析模式：**情報總結**、**戰略意圖研判**（分析潛在目的與心理狀態）、**謀略導變建議**（引用博弈論與孫子兵法）。
 
 ---
 
