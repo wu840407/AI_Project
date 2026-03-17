@@ -1,118 +1,219 @@
-# 🏺 YaYan-AI (雅言) - Cross-Architecture Dialect Intelligence
+# 🏺 YaYan-AI (雅言) - Chinese Dialect Speech-to-Text System
 
 ![Python](https://img.shields.io/badge/Python-3.10-blue)
 ![Architecture](https://img.shields.io/badge/Architecture-Dual%20RTX%204000-purple)
 ![License](https://img.shields.io/badge/License-MIT-orange)
+![Version](https://img.shields.io/badge/Version-V4.1-green)
 
-> **Scalable Local Dialect Intelligence System**
-> **從單兵工作站到戰情伺服器的全本地化方言情報系統**
+> **Full offline, privacy-first Chinese dialect speech transcription with speaker diarization**
+> **全本地化、隱私優先的中文方言語音轉寫系統，支援說話者分離與對話格式輸出**
 
 ---
 
 ## 📖 Introduction (專案簡介)
 
 **[English]**
-**YaYan-AI** is a privacy-first, offline AI system designed to convert dialectal speech (e.g., Taiwanese, Sichuanese, Cantonese) into standard Traditional Chinese intelligence reports.
-Version 2.1 introduces a **Dual-GPU Pipeline**, utilizing two NVIDIA RTX 4000 Ada GPUs to separate ASR (Hearing) and LLM (Reasoning) tasks, resolving memory bottlenecks and increasing throughput.
+**YaYan-AI** is a fully offline AI system that converts Chinese dialectal speech into structured Traditional Chinese transcripts with speaker diarization. It identifies who said what, when, and outputs clean dialogue like:
+
+```
+[00:00]A方：你好
+[00:03]B方：你好啊，最近怎樣？
+```
+
+V4 introduces a complete pipeline redesign: **Pyannote 3.1** for speaker separation, **FunASR SenseVoice** for dialect ASR, **Whisper Large V3** for international languages, and **Qwen2.5-7B** for two-stage LLM correction and analysis — all running locally on dual RTX 4000 Ada GPUs.
 
 **[中文]**
-**雅言 (YaYan-AI)** 是一套基於本地化部署的 AI 情報系統，致力於將多種方言（如台灣口語、四川話、粵語）轉化為標準的「雅言」（正體中文情報摘要）。
-V2.1 版本引入 **雙顯卡平行管線 (Dual-GPU Pipeline)**，利用兩張 RTX 4000 分別處理「聽」與「想」，徹底解決了 VRAM 溢出 (OOM) 問題並大幅提升處理速度。
+**雅言 (YaYan-AI)** 是一套完全本地化的 AI 系統，將多種中文方言語音轉換為帶說話者標記的正體中文對話逐字稿。
+
+V4 完整重構核心管線：使用 **Pyannote 3.1** 進行說話者分離、**FunASR SenseVoice** 處理漢語方言、**Whisper Large V3** 處理國際語言、**Qwen2.5-7B** 執行兩階段文字校正與內容分析，全部在雙 RTX 4000 Ada 伺服器上離線運行。
 
 ---
 
-## 🌟 Architecture Evolution (架構演進)
+## 🌟 Version History (版本演進)
 
-This repository maintains configurations for different hardware scales.
-本專案針對不同硬體規模提供優化配置：
-
-| Feature (功能) | **v1: Workstation (單兵版)** | **v2.1: Server (戰情版)** |
+| 版本 | 硬體 | 核心改進 |
 | :--- | :--- | :--- |
-| **Use Case (定位)** | Prototyping / Edge Inference<br>原型開發 / 邊緣運算 | **Massive Batch Processing<br>大規模戰情分析** |
-| **GPU Config (硬體)** | **1x NVIDIA RTX 3090** (24GB) | **2x NVIDIA RTX 4000 Ada** (20GB x2) |
-| **Strategy (策略)** | Serial Processing (序列處理) | **Pipeline Parallelism (平行管線)** |
-| **ASR (聽覺)** | Whisper-Large-v3 | **GPU 0:** Whisper-Large-v3 + Pyannote |
-| **LLM (大腦)** | Qwen-2.5-7B (4-bit) | **GPU 1:** Llama-3.1-8B-Instruct (4-bit) |
-| **Dialect (方言)** | Basic Prompting | **Advanced Dialect Dashboard (多方言儀表板)** |
-| **OS (系統)** | Windows 10/11 (WSL2) | **Ubuntu Server 22.04 / 24.04** |
+| **V1** | RTX 3090 × 1 | 原型，Whisper + Llama，無說話者分離 |
+| **V2~V3** | RTX 4000 × 2 | 雙卡分流，多方言支援，信心度儀表板 |
+| **V4.1** | RTX 4000 × 2 | **Pyannote 說話者分離、FunASR 方言 ASR、Qwen2.5-7B、LLM 兩階段校正、分批處理長音訊** |
+| **計畫中** | H200 × 2 | Qwen2.5-72B 全精度、LoRA 方言微調 |
 
 ---
 
-## 🚀 Key Features (核心功能 V2.1)
+## 🚀 Key Features V4.1 (核心功能)
 
-### 1. 🗣️ Multi-Dialect Dashboard (多方言戰情儀表板)
-* **EN:** New dropdown menu supports **Taiwanese (Hokkien), Sichuanese, Cantonese, Shanghainese, and Shandong dialect**. Uses advanced prompt engineering to fix homophone errors (e.g., fixing Sichuanese "empty ear" errors).
-* **TW:** 新增方言切換面板，支援**台語、四川話、粵語、上海話、山東話**。透過 Llama 3.1 的方言指令庫，自動修復 Whisper 的同音字錯誤（如修復四川話的空耳現象）。
+### 1. 👥 Speaker Diarization (說話者分離)
+自動偵測音訊中有幾個說話者，輸出帶時間戳記的對話格式。
+支援手動指定說話者人數（2~5人）以提升準確率。
+```
+[00:00]說話者1：你好
+[00:03]說話者2：你好啊
+```
 
-### 2. 🛡️ Dual-GPU Optimization (雙卡平行優化)
-* **EN:** Solved `CUDA OutOfMemory` issues by dedicating **GPU 0 for ASR** (Whisper + Pyannote) and **GPU 1 for LLM** (Llama 3.1).
-* **TW:** 透過硬體分流，將「聽寫」交給第一張顯卡，「思考」交給第二張顯卡，完美解決單卡記憶體不足的崩潰問題，實現流水線式處理。
+### 2. 🎙️ Dual ASR Engine (雙引擎 ASR)
+- **FunASR SenseVoice（cuda:0）**：處理漢語方言（台語、粵語、四川話、吳語、山東話、普通話）
+- **Whisper Large V3（cuda:1）**：處理國際語言（英、日、韓、俄、藏、維吾爾語）
+- 支援自動混合語言偵測
 
-### 3. 📊 Confidence Scoring (信心指數可視化)
-* **EN:** Real-time LogProb calculation displays AI transcription confidence (Green/Orange/Red indicators), helping analysts judge data reliability.
-* **TW:** 實時計算 AI 聽寫的信心水準（LogProb），並以紅/黃/綠燈號顯示，輔助情報官快速判斷逐字稿的可信度。
+### 3. 🧠 Two-Stage LLM Correction (兩階段 LLM 校正)
+- **第一階段**：格式保護校正 — 時間戳記與說話者標記完全不動，只校正文字內容，簡體轉繁體
+- **第二階段**：內容分析 — 重點摘要、說話意圖分析、全文翻譯、情境研判報告
+- 分批處理長音訊，避免 VRAM OOM
 
-### 4. 🧠 Strategic Analysis Modes (戰略研判模式)
-* **EN:** Includes three specialized modes: **Summary**, **Strategic Intent Analysis**, and **Game Theory Suggestions**.
-* **TW:** 內建三種戰術分析模式：**情報總結**、**戰略意圖研判**（分析潛在目的與心理狀態）、**謀略導變建議**（引用博弈論與孫子兵法）。
+### 4. 📊 Confidence Dashboard (信心度儀表板)
+即時顯示 ASR 信心度（%）、說話者數量、語音段數、引擎狀態。
 
----
-
-## 🛠️ Requirements (環境需求)
-
-### Common (通用需求)
-* **Driver:** NVIDIA Driver 535+ (CUDA 12.1+)
-* **Python:** 3.10 (Conda environment recommended)
-
-### Hardware Specifics (硬體需求)
-* **Workstation:** Windows/Linux with 1x GPU (24GB VRAM)
-* **Server:** Linux (Ubuntu) with 2x GPUs (min 20GB VRAM each) + **RAID Storage**.
+### 5. 💬 AI Correction Chat (AI 對話修正框)
+轉寫完成後可直接對 AI 下指令修正輸出，例如：
+- 「把說話者1改成張先生」
+- 「這段對話的主題是什麼？」
 
 ---
 
-## 📦 Installation (安裝步驟)
+## 🏗️ Architecture (系統架構)
 
-### 1. Clone Repository (下載專案)
-    
-    git clone [https://github.com/YourUsername/YaYan-AI.git](https://github.com/YourUsername/YaYan-AI.git)
-    cd YaYan-AI
-    mkdir -p models_cache input_audio output_text
-    
-### 2. Create Environment (建立環境)
-    
-    conda create -n yayan_ai python=3.10 -y
-    conda activate yayan_ai
-    pip install -r requirements.txt
-    
+```
+音訊輸入
+    │
+    ▼
+[音訊預處理] librosa — 重採樣 16kHz、正規化音量
+    │
+    ▼
+[說話者分離] Pyannote 3.1 on cuda:0
+    │  → [(0.0, 3.2, SPEAKER_00), (3.5, 7.1, SPEAKER_01), ...]
+    ▼
+[逐段 ASR]
+  方言 → FunASR SenseVoice on cuda:0
+  外語 → Whisper Large V3 on cuda:1
+    │  → [00:00]說話者1：... \n [00:03]說話者2：...
+    ▼
+[LLM 第一階段] Qwen2.5-7B on cuda:1 — 分批文字校正 + 簡繁轉換
+    │
+    ▼
+[LLM 第二階段] Qwen2.5-7B on cuda:1 — 內容分析
+    │
+    ▼
+Gradio WebUI 輸出
+```
+
+---
+
+## 📦 Models Required (需要下載的模型)
+
+| 模型 | 用途 | 大小 | 來源 |
+| :--- | :--- | :--- | :--- |
+| `pyannote/speaker-diarization-3.1` | 說話者分離 | ~300MB | HuggingFace（需申請授權）|
+| `pyannote/segmentation-3.0` | 分離底層模型 | ~26MB | HuggingFace（需申請授權）|
+| `pyannote/wespeaker-voxceleb-resnet34-LM` | Embedding | ~400MB | HuggingFace（需申請授權）|
+| `iic/SenseVoiceSmall` | 方言 ASR | ~300MB | ModelScope（自動快取）|
+| `openai/whisper-large-v3` | 通用 ASR | ~3GB | HuggingFace |
+| `Qwen/Qwen2.5-7B-Instruct` | LLM 校正+分析 | ~15GB | HuggingFace |
+
+> Pyannote 系列模型需先至 HuggingFace 申請使用授權（免費，審核約數分鐘）。
+
+```bash
+# 登入 HuggingFace
+huggingface-cli login
+
+# 下載模型
+hf download pyannote/speaker-diarization-3.1 \
+  --local-dir /data/ai_models/pyannote-speaker-diarization-3.1
+hf download pyannote/segmentation-3.0 \
+  --local-dir /data/ai_models/pyannote-segmentation-3.0
+hf download pyannote/wespeaker-voxceleb-resnet34-LM \
+  --local-dir /data/ai_models/wespeaker-voxceleb-resnet34-LM
+hf download openai/whisper-large-v3 \
+  --local-dir /data/ai_models/whisper-large-v3
+hf download Qwen/Qwen2.5-7B-Instruct \
+  --local-dir /data/ai_models/Qwen2.5-7B-Instruct
+```
+
+---
+
+## 🛠️ Installation (安裝步驟)
+
+### 1. 系統需求
+- OS：Ubuntu 22.04 / 24.04
+- GPU：NVIDIA RTX 4000 Ada × 2（各 20GB VRAM）或同等級雙卡
+- NVIDIA Driver 535+，CUDA 12.1+
+- Python 3.10
+
+### 2. 建立環境
+
+```bash
+git clone https://github.com/YourUsername/YaYan-AI.git
+cd YaYan-AI
+
+conda create -n yayan_ai python=3.10 -y
+conda activate yayan_ai
+```
+
+### 3. 安裝套件
+
+```bash
+# PyTorch（CUDA 12.1）
+pip install torch==2.5.1+cu121 torchaudio==2.5.1+cu121 torchvision==0.20.1+cu121 \
+  --index-url https://download.pytorch.org/whl/cu121
+
+# 其他依賴
+pip install transformers>=4.45.0 bitsandbytes>=0.43.0 accelerate>=0.26.0 \
+  funasr==1.3.1 "pyannote.audio==3.3.2" onnxruntime-gpu \
+  librosa soundfile gradio>=4.0.0 numpy scipy
+```
+
+### 4. 設定模型路徑
+
+下載完模型後，確認 `app_rtx4000_V4.py` 裡的 `MODEL_PATHS` 對應正確路徑：
+
+```python
+MODEL_PATHS = {
+    "pyannote_diarization": "/data/ai_models/pyannote-speaker-diarization-3.1",
+    "pyannote_segmentation": "/data/ai_models/pyannote-segmentation-3.0",
+    "sensevoice":            "/data/ai_models/iic/SenseVoiceSmall",
+    "whisper":               "/data/ai_models/whisper-large-v3",
+    "whisper_tw":            "",   # 台語微調版（選用，留空則使用通用版）
+    "qwen":                  "/data/ai_models/Qwen2.5-7B-Instruct",
+}
+```
+
+同時修改 `pyannote-speaker-diarization-3.1/config.yaml`，將 embedding 路徑指向本地：
+
+```yaml
+embedding: /data/ai_models/wespeaker-voxceleb-resnet34-LM
+segmentation: /data/ai_models/pyannote-segmentation-3.0/pytorch_model.bin
+```
+
+---
+
 ## ▶️ Usage (使用方法)
-### Option A: Running on Workstation (RTX 3090)
-Uses Qwen-7B and Single GPU logic. 適用於單卡開發環境。
-    # Start Web UI
-    python app.py
 
-    # Batch Process (Input folder: ./input_audio)
-    python auto_batch.py
-    
-Note: The first run will automatically download models (~15GB). Please wait. 注意： 首次執行將自動下載模型（約 15GB），請耐心等待進度條跑完。
-    
-### Option B: Running on Server (Dual RTX 4000)
-    # Start Web UI (Server Mode)
-    python app_rtx4000.py
+```bash
+conda activate yayan_ai
+cd /data/AI_Project
+python app_rtx4000_V4.py
+```
 
-    # Batch Process (Input folder: /data/input_audio)
-    python auto_batch_server.py
-    
-## 🏗️ Technical Stack (技術架構)
-    
-* **Inference Engine:** PyTorch, Hugging Face Transformers
+開啟瀏覽器訪問 `http://localhost:7860`
 
-* **Quantization:** BitsAndBytes (NF4) for VRAM optimization
+1. 上傳音訊檔案或直接錄音
+2. 選擇來源語言
+3. 指定說話者人數（或自動偵測）
+4. 選擇分析模式
+5. 點擊「開始轉寫分析」
 
-* **Audio Processing:** Librosa, SoundFile
+---
 
-* **Interface:** Gradio (WebUI)
+## 🔧 VRAM Usage (顯存配置)
 
-* **Deployment:** Docker Ready (Server Edition)
+| GPU | 載入內容 | 佔用估算 |
+| :--- | :--- | :--- |
+| cuda:0 | Pyannote 3.1 + FunASR SenseVoice | ~6~7 GB |
+| cuda:1 | Whisper Large V3 (fp16) + Qwen2.5-7B (4-bit) | ~8~9 GB |
+
+> 兩者交替使用，不會同時佔滿。RTX 4000 Ada 20GB 可正常運行。
+
+---
 
 ## 📝 License
-    This project is open-source and available under the MIT License. 
+
+This project is open-source and available under the MIT License.
