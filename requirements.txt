@@ -1,23 +1,54 @@
-# 核心 AI 框架 (Core AI)
-torch>=2.1.0
-torchaudio>=2.1.0
-torchvision
+# YaYan-AI v4.5 — Quadro RTX 6000 (Turing) 相容
+# CUDA 12.1+ / Python 3.10 / Ubuntu 22.04
+# 安裝順序：torch 系列 → 推論 → ASR/Audio → 介面 → 工具
 
-# Hugging Face 生態系 (Models & Quantization)
-transformers>=4.40.0
-accelerate>=0.27.0
-bitsandbytes>=0.41.0
-huggingface_hub>=0.20.0
+# ---------- 核心 PyTorch（Turing SM_75 相容）----------
+# 連網安裝：pip install torch==2.3.1 torchaudio==2.3.1 --index-url https://download.pytorch.org/whl/cu121
+torch>=2.3.0,<2.6.0
+torchaudio>=2.3.0,<2.6.0
 
-# 網頁介面 (Web UI)
-gradio>=4.0.0
+# ---------- HuggingFace 生態 ----------
+transformers>=4.45.0,<4.50.0
+accelerate>=0.34.0
+bitsandbytes>=0.43.0
+huggingface_hub>=0.25.0
+safetensors>=0.4.5
+sentencepiece>=0.2.0
+protobuf>=4.25,<5.0
+tokenizers>=0.20.0
 
-# 音訊處理 (Audio Processing)
-librosa>=0.10.0
-soundfile>=0.12.0
-numpy
-scipy
+# ---------- 可選：vLLM（Turing 需 enforce_eager） ----------
+# vllm==0.6.4  # 解開註解以啟用；首次部署建議用 transformers 後端
 
-# 工具 (Utilities)
-tqdm
-requests
+# ---------- ASR ----------
+funasr>=1.1.0
+modelscope>=1.20.0
+openai-whisper>=20240930   # 提供 whisper.audio.load_audio
+
+# ---------- 音訊前處理 ----------
+librosa>=0.10.2
+soundfile>=0.12.1
+numpy>=1.26,<2.2
+scipy>=1.11.0
+pydub>=0.25.1
+ffmpeg-python>=0.2.0
+
+# ---------- VAD / LID / Diarization ----------
+silero-vad>=5.1
+speechbrain>=1.0.0
+# pyannote.audio>=3.1.0   # 解開註解以啟用 diarization（需 HF token 下載權重）
+
+# ---------- 正體中文 ----------
+opencc-python-reimplemented>=0.1.7
+
+# ---------- 介面 ----------
+gradio>=4.40.0,<5.0.0
+
+# ---------- 自動化 ----------
+watchdog>=4.0.0
+
+# ---------- 工具 ----------
+pyyaml>=6.0
+tqdm>=4.66.0
+requests>=2.32.0
+python-dotenv>=1.0.0

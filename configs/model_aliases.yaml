@@ -1,0 +1,66 @@
+# YaYan-AI 模型別名對照表（內部維護用，UI 與 log 只顯示 YaYan_* 前綴）
+# real_id 僅在離線下載階段使用；部署後不在使用者介面顯示
+# License 欄位為授權合規追蹤用，請勿移除
+
+models:
+  YaYan_Reasoner:
+    real_id: Qwen/Qwen3-14B-Instruct
+    local_dir: YaYan_Reasoner
+    role: llm_general
+    license: Apache-2.0
+    size_gb: 28
+    quantizable: true
+
+  YaYan_Translator:
+    real_id: Qwen/Qwen3-14B-Instruct
+    local_dir: YaYan_Reasoner
+    role: llm_translate
+    license: Apache-2.0
+    size_gb: 0
+    note: "shares weights with YaYan_Reasoner"
+
+  YaYan_ASR_Mandarin:
+    real_id: FunAudioLLM/SenseVoiceSmall
+    local_dir: YaYan_ASR_Mandarin
+    role: asr_chinese_dialects
+    license: Apache-2.0
+    size_gb: 1.0
+    languages: [zh, cmn, yue, wuu, cdo, ja, ko, en]
+
+  YaYan_ASR_Eastern:
+    real_id: DataoceanAI/dolphin-base
+    local_dir: YaYan_ASR_Eastern
+    role: asr_eastern_minorities
+    license: Apache-2.0
+    size_gb: 0.5
+    languages: [bo, ug, kk, mn, zh-dialects-22]
+
+  YaYan_ASR_Global:
+    real_id: openai/whisper-large-v3
+    local_dir: YaYan_ASR_Global
+    role: asr_persian_urdu_etc
+    license: MIT
+    size_gb: 3.0
+    languages: [fa, ur, en, ar, hi, ru, "+96-others"]
+
+  YaYan_VAD:
+    real_id: snakers4/silero-vad
+    local_dir: YaYan_VAD
+    role: voice_activity_detection
+    license: MIT
+    size_gb: 0.05
+
+  YaYan_LID:
+    real_id: speechbrain/lang-id-voxlingua107-ecapa
+    local_dir: YaYan_LID
+    role: language_identification
+    license: Apache-2.0
+    size_gb: 0.1
+
+  YaYan_Diarize:
+    real_id: pyannote/speaker-diarization-3.1
+    local_dir: YaYan_Diarize
+    role: speaker_diarization
+    license: MIT
+    size_gb: 0.05
+    note: "gated repo - HF token required for download"

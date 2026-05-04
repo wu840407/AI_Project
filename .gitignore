@@ -1,20 +1,44 @@
-# --- AI 模型 (絕對不能上傳) ---
+# --- AI 模型權重（絕對不能上傳）---
 models_cache/
+ai_models/
+/data/
 *.pt
 *.bin
 *.safetensors
 *.engine
 *.onnx
 
-# --- 測試資料 (隱私考量，不上傳) ---
+# --- 離線打包 ---
+offline_packages/
+*.whl
+*.tar.gz
+
+# --- 測試資料（隱私）---
 input_audio/
 output_text/
+yayan_logs/
+yayan_cache/
 
-# --- Python 暫存檔 (垃圾檔案) ---
+# --- Docker 產出 ---
+docker/yayan-ai-*.tar
+
+# --- Python ---
 __pycache__/
 *.pyc
+*.pyo
 .ipynb_checkpoints/
 .env
+.venv/
+venv/
+*.egg-info/
+build/
+dist/
 
-# --- VS Code 設定 (選用，通常不傳) ---
+# --- IDE ---
 .vscode/
+.idea/
+*.swp
+
+# --- OS ---
+.DS_Store
+Thumbs.db

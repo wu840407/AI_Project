@@ -1,0 +1,81 @@
+# YaYan-AI v4.5 主設定檔
+# Quadro RTX 6000 (Turing 24GB) x 2 / Ubuntu 22.04
+project:
+  name: YaYan-AI
+  version: "4.5.0"
+  edition: "RTX6000-Server"
+
+paths:
+  models_root: /data/ai_models
+  input_dir: /data/input_audio
+  output_dir: /data/output_text
+  cache_dir: /data/yayan_cache
+  log_dir: /data/yayan_logs
+
+devices:
+  asr_gpu: "cuda:0"
+  llm_gpu: "cuda:1"
+
+audio:
+  sample_rate: 16000
+  vad_threshold: 0.5
+  max_chunk_seconds: 30
+  min_chunk_seconds: 0.5
+  pad_seconds: 0.2
+
+asr:
+  enable_vad: true
+  enable_lid: true
+  enable_diarize: false
+  default_alias: YaYan_ASR_Mandarin
+  routing:
+    zh: YaYan_ASR_Mandarin
+    cmn: YaYan_ASR_Mandarin
+    yue: YaYan_ASR_Mandarin
+    wuu: YaYan_ASR_Mandarin
+    cdo: YaYan_ASR_Mandarin
+    bo: YaYan_ASR_Eastern
+    ug: YaYan_ASR_Eastern
+    fa: YaYan_ASR_Global
+    ur: YaYan_ASR_Global
+    en: YaYan_ASR_Global
+    auto: YaYan_ASR_Mandarin
+
+llm:
+  alias: YaYan_Reasoner
+  backend: transformers
+  quantization: 4bit
+  max_new_tokens: 1024
+  temperature: 0.3
+  top_p: 0.9
+  do_sample: false
+  max_model_len: 4096
+  gpu_memory_utilization: 0.85
+  enforce_eager: true
+  dtype: float16
+
+diarize:
+  enabled: false
+  min_speakers: 1
+  max_speakers: 4
+
+postprocess:
+  use_opencc: true
+  opencc_config: s2twp.json
+
+server:
+  host: 0.0.0.0
+  port: 7860
+  share: false
+  show_internal_names: false
+
+batch:
+  watch_input: true
+  poll_interval_seconds: 5
+  parallel_workers: 1
+  output_format: txt
+  delete_after_process: false
+
+logging:
+  level: INFO
+  redact_internal_names: true
