@@ -1,34 +1,40 @@
 # YaYan-AI v4.5 — Quadro RTX 6000 (Turing) 相容
 # CUDA 12.1+ / Python 3.10 / Ubuntu 22.04
-# 安裝順序：torch 系列 → 推論 → ASR/Audio → 介面 → 工具
 
-# ---------- 核心 PyTorch（Turing SM_75 相容）----------
-# 連網安裝：pip install torch==2.3.1 torchaudio==2.3.1 --index-url https://download.pytorch.org/whl/cu121
+# ---------- 核心 PyTorch ----------
 torch>=2.3.0,<2.6.0
 torchaudio>=2.3.0,<2.6.0
 
+# ---------- numpy 鎖 1.x（vllm 0.6.x / outlines / pyannote 都不支援 2.x）----------
+numpy>=1.26,<2.0
+
 # ---------- HuggingFace 生態 ----------
-transformers>=4.45.0,<4.50.0
+# Qwen3 需要 transformers>=4.51.0
+transformers>=4.51.0,<4.57.0
+# huggingface_hub 1.0 移除 HfFolder / 舊 API，gradio 4.x 還在用，必須鎖 <1.0
+huggingface_hub>=0.25.0,<1.0
 accelerate>=0.34.0
 bitsandbytes>=0.43.0
-huggingface_hub>=0.25.0
 safetensors>=0.4.5
 sentencepiece>=0.2.0
 protobuf>=4.25,<5.0
 tokenizers>=0.20.0
 
-# ---------- 可選：vLLM（Turing 需 enforce_eager） ----------
-# vllm==0.6.4  # 解開註解以啟用；首次部署建議用 transformers 後端
+# ---------- AWQ runtime（transformers 後端載 Qwen3-32B-AWQ 用）----------
+autoawq==0.2.7.post3
+
+# ---------- vLLM（Turing 必須鎖 0.6.x；當前用 transformers 為主，註解掉避免污染）----------
+# vllm==0.6.4.post1
+# openai>=1.40.0
 
 # ---------- ASR ----------
 funasr>=1.1.0
 modelscope>=1.20.0
-openai-whisper>=20240930   # 提供 whisper.audio.load_audio
+openai-whisper>=20240930
 
 # ---------- 音訊前處理 ----------
 librosa>=0.10.2
 soundfile>=0.12.1
-numpy>=1.26,<2.2
 scipy>=1.11.0
 pydub>=0.25.1
 ffmpeg-python>=0.2.0
@@ -36,7 +42,9 @@ ffmpeg-python>=0.2.0
 # ---------- VAD / LID / Diarization ----------
 silero-vad>=5.1
 speechbrain>=1.0.0
-# pyannote.audio>=3.1.0   # 解開註解以啟用 diarization（需 HF token 下載權重）
+pyannote.audio>=3.1.0,<4.0
+pyannote.pipeline>=3.0
+pyannote.metrics>=3.2
 
 # ---------- 正體中文 ----------
 opencc-python-reimplemented>=0.1.7
