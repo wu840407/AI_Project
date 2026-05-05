@@ -13,6 +13,7 @@ import os
 import sys
 import json
 import logging
+from datetime import datetime
 from pathlib import Path
 
 os.environ.setdefault("HF_HUB_OFFLINE", "1")
@@ -52,7 +53,6 @@ DIALECT_TO_ROUTING = {
     "英語": "en",
 }
 DIALECT_CHOICES = list(DIALECT_TO_ROUTING.keys())
-
 ROUTING_TO_DIALECT = {v: k for k, v in DIALECT_TO_ROUTING.items()}
 
 
@@ -76,6 +76,7 @@ def fn_transcribe(audio_path: str, dialect_label: str, enable_diarize: bool):
     detected = ROUTING_TO_DIALECT.get(result.routing, result.routing)
     info = f"偵測語言：{detected}（{result.routing}）｜段數：{len(result.segments)}"
     meta = json.dumps(result.to_dict(), ensure_ascii=False, indent=2)
+    # outputs 順序: info_box, raw_text_display(State), raw_text_box, translated_box, meta_box
     return info, result.raw_text, result.raw_text, result.translated_text, meta
 
 
@@ -101,7 +102,8 @@ def fn_save(translated_text: str, source_audio: str) -> str:
     out_dir = Path(CONFIG["paths"]["output_dir"])
     out_dir.mkdir(parents=True, exist_ok=True)
     base = Path(source_audio).stem if source_audio else "manual"
-    out = out_dir / f"{base}_translated.txt"
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    out = out_dir / f"{base}_{ts}.txt"
     out.write_text(translated_text, encoding="utf-8")
     return f"✅ 已儲存：{out}"
 
@@ -144,7 +146,7 @@ def build_ui() -> gr.Blocks:
 
             with gr.Column(scale=2):
                 gr.Markdown("### 📜 識別原文（可編輯）")
-                raw_text_display = gr.State("")
+                raw_text_display = gr.State("")  # 保留原始 ASR 文本，refine 用
                 raw_text_box = gr.Textbox(
                     label="ASR 原文",
                     lines=6,
@@ -177,12 +179,14 @@ def build_ui() -> gr.Blocks:
             outputs=[info_box, raw_text_display, raw_text_box, translated_box, meta_box],
         )
 
+        # 依編輯後「原文」重新翻譯：以 raw_text_box 當輸入
         refine_raw_btn.click(
             fn=fn_refine,
             inputs=[raw_text_display, raw_text_box, dialect],
             outputs=[translated_box],
         )
 
+        # 依編輯後「譯文」再潤飾：以 translated_box 當輸入
         refine_translated_btn.click(
             fn=fn_refine,
             inputs=[raw_text_display, translated_box, dialect],
@@ -202,7 +206,7 @@ def build_ui() -> gr.Blocks:
             1. 上傳電話錄音 → 點「開始轉錄翻譯」 → 取得原文與譯文。
             2. 若 ASR 有錯，**直接在「ASR 原文」框修改** → 點「依編輯後原文重新翻譯潤飾」。
             3. 若譯文要微調，**直接在「譯文」框修改** → 點「依編輯後譯文重新潤飾」。
-            4. 滿意後按「儲存譯文」，輸出到設定的 output_dir。
+            4. 滿意後按「儲存譯文」，輸出到設定的 output_dir（檔名含時戳，不會覆蓋）。
             """
         )
     return demo
@@ -215,6 +219,7 @@ def main():
     print(f"  YaYan-AI v{__version__}  |  Edition: RTX6000-Server")
     print(f"  Models root: {CONFIG['paths']['models_root']}")
     print(f"  ASR GPU: {CONFIG['devices']['asr_gpu']}  |  LLM GPU: {CONFIG['devices']['llm_gpu']}")
+    print(f"  LLM backend: {CONFIG['llm'].get('backend')}  |  quant: {CONFIG['llm'].get('quantization')}")
     print("=" * 60)
 
     print("⏳ 預載模型 …")

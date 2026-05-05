@@ -73,8 +73,9 @@ def warmup() -> None:
 def _load_audio(path: str) -> np.ndarray:
     sr = CONFIG["audio"]["sample_rate"]
     y, _ = librosa.load(path, sr=sr, mono=True)
-    if np.max(np.abs(y)) > 0:
-        y = y / np.max(np.abs(y))
+    peak = float(np.max(np.abs(y))) if y.size else 0.0
+    if peak > 0:
+        y = y / peak
     return y.astype(np.float32)
 
 
@@ -93,6 +94,15 @@ def transcribe_audio(
     audio = _load_audio(audio_path)
     sr = audio_cfg["sample_rate"]
 
+    if audio.size == 0:
+        logger.warning(f"音檔為空: {audio_path}")
+        return TranscriptionResult(
+            audio_path=audio_path,
+            detected_language=language,
+            routing=language,
+        )
+
+    # ---- LID ----
     if language == "auto" and asr_cfg["enable_lid"]:
         from . import lid
         try:
@@ -104,6 +114,7 @@ def transcribe_audio(
     else:
         routing = language
 
+    # ---- VAD ----
     if use_vad:
         from . import vad
         try:
@@ -114,6 +125,7 @@ def transcribe_audio(
     else:
         chunks = [(0.0, len(audio) / sr, audio)]
 
+    # ---- Diarization ----
     speakers = None
     if use_diarize:
         from . import diarize
@@ -122,6 +134,7 @@ def transcribe_audio(
         except Exception as e:
             logger.warning(f"Diarization 失敗，略過: {e}")
 
+    # ---- ASR ----
     from .asr import transcribe as asr_transcribe
 
     segments: List[Segment] = []
@@ -147,12 +160,17 @@ def transcribe_audio(
     raw_text = "\n".join(
         f"[{s.speaker}] {s.raw_text}" if use_diarize else s.raw_text
         for s in segments
-    )
+    ).strip()
 
+    # ---- LLM 翻譯 + OpenCC 後處理 ----
     translated = ""
-    if raw_text.strip():
-        llm = _get_llm()
-        translated = llm.translate(raw_text, source_language=routing)
+    if raw_text:
+        try:
+            llm = _get_llm()
+            translated = llm.translate(raw_text, source_language=routing)
+        except Exception as e:
+            logger.exception(f"LLM 翻譯失敗: {e}")
+            translated = ""
         translated = to_taiwan_traditional(translated)
 
     return TranscriptionResult(
@@ -170,9 +188,27 @@ def refine_with_user_edit(
     user_edit: str,
     source_language: str = "zh",
 ) -> str:
-    """對話修改回環：使用者編輯後重新潤飾，不重做 ASR。"""
-    llm = _get_llm()
-    refined = llm.refine(raw_text=raw_text, user_edit=user_edit, source_language=source_language)
+    """對話修改回環：使用者編輯後重新潤飾，不重做 ASR。
+
+    raw_text: 原始 ASR 文本（作為上下文參考）
+    user_edit: 使用者編輯後的內容（可能是原文，也可能是譯文）
+    """
+    if not user_edit or not user_edit.strip():
+        return ""
+    raw_text = (raw_text or user_edit).strip()
+    user_edit = user_edit.strip()
+
+    try:
+        llm = _get_llm()
+        refined = llm.refine(
+            raw_text=raw_text,
+            user_edit=user_edit,
+            source_language=source_language,
+        )
+    except Exception as e:
+        logger.exception(f"LLM refine 失敗: {e}")
+        return user_edit  # fallback：至少把使用者編輯過的內容回傳
+
     return to_taiwan_traditional(refined)
 
 
