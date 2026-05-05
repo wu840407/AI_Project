@@ -1,5 +1,5 @@
 # YaYan-AI v4.5 主設定檔
-# Quadro RTX 6000 (Turing 24GB) x 2 / Ubuntu 22.04
+# Quadro RTX 6000 (Turing 24GB) x 2 / Ubuntu 24.04
 project:
   name: YaYan-AI
   version: "4.5.0"
@@ -43,16 +43,33 @@ asr:
 
 llm:
   alias: YaYan_Reasoner
+  # 後端三選一：
+  #   transformers - ★ 最穩、不需 JIT 編譯，當前 Turing 環境推薦
+  #   vllm         - in-process，會獨佔 CUDA_VISIBLE_DEVICES（不建議）
+  #   openai       - 由 start_server.sh 另起 vllm serve；需要 vllm 0.6.4.post1（單卡）
   backend: transformers
-  quantization: 4bit
+
+  model_id: Qwen/Qwen3-32B-AWQ
+  quantization: awq                     # transformers 會從 config.json 自動偵測
+  dtype: float16                        # Turing 不支援 bfloat16
   max_new_tokens: 1024
-  temperature: 0.3
-  top_p: 0.9
-  do_sample: false
   max_model_len: 4096
+
+  # 取樣
+  do_sample: true
+  temperature: 0.6
+  top_p: 0.9
+  top_k: 20
+  repetition_penalty: 1.05
+
+  # vllm in-process 專屬（backend != transformers 時才生效）
   gpu_memory_utilization: 0.85
-  enforce_eager: true
-  dtype: float16
+  enforce_eager: true                   # Turing 必開
+  tensor_parallel_size: 1               # 單卡，雙卡跑 ASR/LLM 隔離
+
+  # openai backend 專屬
+  openai_base_url: "http://127.0.0.1:8001/v1"
+  served_model_name: "YaYan_Reasoner"
 
 diarize:
   enabled: false
