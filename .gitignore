@@ -42,3 +42,34 @@ dist/
 # --- OS ---
 .DS_Store
 Thumbs.db
+# 模型權重（從外部下載）
+/data/ai_models/
+
+# 執行階段產物
+/data/input_audio/
+/data/output_text/
+/data/yayan_logs/
+/data/yayan_cache/
+/data/vllm_serve.log
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
+# 環境變數 / 密鑰
+.env
+*.pem
+*.key
+*.pfx
+*.cer
+*.crt
+
+# Conda
+.conda/
+
+# IDE
+.vscode/
+.idea/
+*.swp
