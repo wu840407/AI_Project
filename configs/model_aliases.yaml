@@ -3,22 +3,25 @@
 # License 欄位為授權合規追蹤用，請勿移除
 
 models:
+  # ============= LLM =============
   YaYan_Reasoner:
-    real_id: Qwen/Qwen3-14B-Instruct
+    real_id: Qwen/Qwen3-32B-AWQ
     local_dir: YaYan_Reasoner
     role: llm_general
     license: Apache-2.0
-    size_gb: 28
-    quantizable: true
+    size_gb: 19
+    quantizable: false
+    note: "AWQ INT4 預量化；Turing 24GB 單卡剛好可載入"
 
   YaYan_Translator:
-    real_id: Qwen/Qwen3-14B-Instruct
+    real_id: Qwen/Qwen3-32B-AWQ
     local_dir: YaYan_Reasoner
     role: llm_translate
     license: Apache-2.0
     size_gb: 0
     note: "shares weights with YaYan_Reasoner"
 
+  # ============= ASR =============
   YaYan_ASR_Mandarin:
     real_id: FunAudioLLM/SenseVoiceSmall
     local_dir: YaYan_ASR_Mandarin
@@ -43,13 +46,18 @@ models:
     size_gb: 3.0
     languages: [fa, ur, en, ar, hi, ru, "+96-others"]
 
+  # ============= VAD =============
+  # silero-vad 不從 HF 下載，靠 pip 套件 (silero-vad>=5.1) 內建權重。
+  # 此 alias 僅作為文件記錄，verify_models.py 不會檢查 local_dir 是否存在。
   YaYan_VAD:
     real_id: snakers4/silero-vad
     local_dir: YaYan_VAD
     role: voice_activity_detection
     license: MIT
-    size_gb: 0.05
+    size_gb: 0.005
+    note: "pip-bundled, no local_dir download needed"
 
+  # ============= LID =============
   YaYan_LID:
     real_id: speechbrain/lang-id-voxlingua107-ecapa
     local_dir: YaYan_LID
@@ -57,10 +65,25 @@ models:
     license: Apache-2.0
     size_gb: 0.1
 
+  # ============= Diarization 三件套（gated, HF token required）=============
   YaYan_Diarize:
     real_id: pyannote/speaker-diarization-3.1
     local_dir: YaYan_Diarize
-    role: speaker_diarization
+    role: speaker_diarization_pipeline
     license: MIT
-    size_gb: 0.05
-    note: "gated repo - HF token required for download"
+    size_gb: 0.01
+    note: "pipeline config; references YaYan_Diarize_Seg + YaYan_Diarize_Embed"
+
+  YaYan_Diarize_Seg:
+    real_id: pyannote/segmentation-3.0
+    local_dir: YaYan_Diarize_Seg
+    role: speaker_diarization_segmentation
+    license: MIT
+    size_gb: 0.006
+
+  YaYan_Diarize_Embed:
+    real_id: pyannote/wespeaker-voxceleb-resnet34-LM
+    local_dir: YaYan_Diarize_Embed
+    role: speaker_diarization_embedding
+    license: CC-BY-4.0
+    size_gb: 0.028
