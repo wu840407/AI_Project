@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""驗證所有 YaYan-AI v4.5 模型已正確放置在 models_root，可離線載入。"""
+"""v4.6 模型驗證腳本。"""
 from __future__ import annotations
 
 import json
@@ -11,16 +11,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from yayan.config import CONFIG, ALIASES, model_path  # noqa: E402
 
 REQUIRED = [
-    ("YaYan_Reasoner", True, 20_000, "LLM (Qwen3-14B BF16 ~28GB)"),
-    ("YaYan_ASR_Mandarin",  True,     200,  "SenseVoiceSmall"),
-    ("YaYan_ASR_Eastern",   True,     100,  "Dolphin-base"),
+    ("YaYan_Reasoner",      True,  20_000,  "LLM (Qwen3-14B BF16 ~28GB)"),
+    ("YaYan_ASR_Dialect",   True,   1_200,  "Dolphin-CN-Dialect-Small (22 方言 ~1.6GB)"),
     ("YaYan_ASR_Global",    True,   1_000,  "Whisper-large-v3"),
     ("YaYan_LID",           True,      10,  "VoxLingua107 ECAPA"),
 ]
 OPTIONAL = [
-    ("YaYan_Diarize",        False,    1,  "pyannote speaker-diarization-3.1 (pipeline)"),
+    ("YaYan_Diarize",        False,    1,  "pyannote speaker-diarization-3.1"),
     ("YaYan_Diarize_Seg",    False,    1,  "pyannote segmentation-3.0"),
-    ("YaYan_Diarize_Embed",  False,    5,  "pyannote wespeaker-voxceleb-resnet34-LM"),
+    ("YaYan_Diarize_Embed",  False,    5,  "pyannote wespeaker"),
 ]
 
 
@@ -38,10 +37,8 @@ def _check_llm_quant_config(p: Path) -> str:
     except Exception:
         return ""
     qc = cfg.get("quantization_config") or {}
-    quant_method = qc.get("quant_method") or qc.get("method") or ""
-    bits = qc.get("bits") or qc.get("w_bit") or ""
-    if quant_method:
-        return f" [quant={quant_method}{f'/{bits}-bit' if bits else ''}]"
+    if qc.get("quant_method"):
+        return f" [quant={qc['quant_method']}]"
     if cfg.get("torch_dtype"):
         return f" [dtype={cfg['torch_dtype']}]"
     return ""
@@ -52,7 +49,7 @@ def check(alias: str, required: bool, min_mb: float, hint: str) -> bool:
         p = model_path(alias)
     except KeyError:
         if required:
-            print(f"  ❌ {alias} 未註冊於 yayan/config.py 的 ALIASES，請補上對應路徑")
+            print(f"  ❌ {alias} 未註冊於 model_aliases.yaml")
             return False
         print(f"  ⚠️  {alias} 未註冊（可選，跳過）  ({hint})")
         return True
@@ -62,17 +59,13 @@ def check(alias: str, required: bool, min_mb: float, hint: str) -> bool:
         print(f"  {msg}: {alias}  -> {p}    ({hint})")
         return not required
 
-    files = list(p.iterdir())
-    if not files:
+    if not any(p.iterdir()):
         print(f"  ❌ 空資料夾: {alias} -> {p}")
         return not required
 
     size_mb = _dir_size_mb(p)
     if size_mb < min_mb:
-        print(
-            f"  ⚠️  {alias} 大小可疑 ({size_mb:.1f} MB < 預期 {min_mb} MB)，"
-            f"可能下載不完整 -> {p}"
-        )
+        print(f"  ⚠️  {alias} 大小可疑 ({size_mb:.1f} MB < 預期 {min_mb} MB)")
         return not required
 
     extra = _check_llm_quant_config(p) if alias == "YaYan_Reasoner" else ""
@@ -87,34 +80,44 @@ def _check_silero_vad():
         print(f"  ✅ silero-vad（pip 內建權重） v{ver}")
         return True
     except ImportError:
-        print(f"  ❌ silero-vad 未安裝，請：pip install 'silero-vad>=5.1'")
+        print(f"  ❌ silero-vad 未安裝")
+        return False
+
+
+def _check_dolphin_sdk():
+    try:
+        import dolphin
+        print(f"  ✅ dolphin SDK 已安裝")
+        return True
+    except ImportError:
+        print(f"  ❌ dolphin SDK 未安裝，請：pip install dataoceanai-dolphin")
         return False
 
 
 def main():
     print("=" * 64)
-    print(f"  YaYan-AI v4.5 模型檢查")
+    print(f"  YaYan-AI v4.6 模型檢查")
     print(f"  models_root: {CONFIG['paths']['models_root']}")
-    print(f"  llm.backend: {CONFIG['llm'].get('backend')}  "
-          f"quant: {CONFIG['llm'].get('quantization')}")
+    print(f"  llm.backend: {CONFIG['llm'].get('backend')} | quant: {CONFIG['llm'].get('quantization')}")
     print("=" * 64)
 
-    print("\n[必要 — 從 HF 下載到 models_root]")
+    print("\n[必要 — 從 HF 下載]")
     ok = all(check(a, r, m, h) for a, r, m, h in REQUIRED)
 
-    print("\n[必要 — pip 套件內建]")
+    print("\n[必要 — pip 套件]")
     ok = _check_silero_vad() and ok
+    ok = _check_dolphin_sdk() and ok
 
-    print("\n[可選 — Diarization 三件套]")
+    print("\n[可選 — Diarization]")
     for a, r, m, h in OPTIONAL:
         check(a, r, m, h)
 
     print("\n" + "=" * 64)
     if ok:
-        print("✅ 所有必要模型已就緒，可啟動 app_rtx6000.py")
+        print("✅ 所有必要模型已就緒")
         sys.exit(0)
     else:
-        print("❌ 有必要模型缺失或不完整")
+        print("❌ 有必要模型/套件缺失")
         sys.exit(1)
 
 
