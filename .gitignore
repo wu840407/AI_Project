@@ -73,3 +73,20 @@ __pycache__/
 .vscode/
 .idea/
 *.swp
+
+# v4.6 補充
+/data/
+ai_models/
+yayan_logs/
+*.gguf
+*.bin.bak
+*.safetensors.bak
+
+# v4.6 補充
+/data/
+ai_models/
+yayan_logs/
+*.gguf
+*.bin.bak
+*.safetensors.bak
+
