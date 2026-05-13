@@ -1,8 +1,7 @@
-# YaYan-AI v4.5 主設定檔
-# Quadro RTX 6000 (Turing 24GB) x 2 / Ubuntu 24.04
+# YaYan-AI v4.6 主設定檔
 project:
   name: YaYan-AI
-  version: "4.5.0"
+  version: "4.6.0"
   edition: "RTX6000-Server"
 
 paths:
@@ -26,45 +25,66 @@ audio:
 asr:
   enable_vad: true
   enable_lid: true
-  enable_diarize: false
-  default_alias: YaYan_ASR_Mandarin
+  enable_diarize: true
+  default_alias: YaYan_ASR_Dialect
   routing:
-    # ── 漢語方言（SenseVoice 中文最強）──
-    zh: YaYan_ASR_Mandarin
-    cmn: YaYan_ASR_Mandarin
-    yue: YaYan_ASR_Mandarin
-    wuu: YaYan_ASR_Mandarin
-    cdo: YaYan_ASR_Mandarin
-    # ── 東亞（SenseVoice 也訓練了日韓）──
-    ja: YaYan_ASR_Mandarin
-    ko: YaYan_ASR_Mandarin
-    # ── 中亞 / 藏語 ──
-    bo: YaYan_ASR_Eastern
-    ug: YaYan_ASR_Eastern
-    # ── 中東 / 南亞 ──
+    # ── 漢語方言 → Dolphin-CN-Dialect ──
+    zh: YaYan_ASR_Dialect
+    cmn: YaYan_ASR_Dialect
+    cmn-ne: YaYan_ASR_Dialect    # 東北話
+    cmn-sd: YaYan_ASR_Dialect    # 山東話
+    cmn-zy: YaYan_ASR_Dialect    # 河南話
+    cmn-xa: YaYan_ASR_Dialect    # 西安話
+    cmn-lz: YaYan_ASR_Dialect    # 蘭州話
+    cmn-sw: YaYan_ASR_Dialect    # 四川話
+    cmn-wh: YaYan_ASR_Dialect    # 武漢話
+    cmn-jh: YaYan_ASR_Dialect    # 南京話
+    yue: YaYan_ASR_Dialect       # 粵語
+    wuu: YaYan_ASR_Dialect       # 吳語
+    wuu-sz: YaYan_ASR_Dialect    # 蘇州話
+    wuu-nb: YaYan_ASR_Dialect    # 寧波話
+    wuu-wz: YaYan_ASR_Dialect    # 溫州話
+    nan: YaYan_ASR_Dialect       # 閩南語
+    nan-cs: YaYan_ASR_Dialect    # 潮汕話
+    nan-hn: YaYan_ASR_Dialect    # 海南話
+    cdo: YaYan_ASR_Dialect       # 福州話
+    hak: YaYan_ASR_Dialect       # 客家話
+    hsn: YaYan_ASR_Dialect       # 湘語
+    gan: YaYan_ASR_Dialect       # 贛語
+    cjy: YaYan_ASR_Dialect       # 晉語
+    # 別名
+    min: YaYan_ASR_Dialect
+    hokkien: YaYan_ASR_Dialect
+    # ── 藏維 ──
+    bo: YaYan_ASR_Dialect
+    ug: YaYan_ASR_Dialect
+    # ── 日韓 → Whisper（在日韓上更強） ──
+    ja: YaYan_ASR_Global
+    ko: YaYan_ASR_Global
+    # ── 中東/南亞 ──
     fa: YaYan_ASR_Global
     ur: YaYan_ASR_Global
     ar: YaYan_ASR_Global
     hi: YaYan_ASR_Global
-    # ── 歐洲（Whisper-large-v3）──
+    # ── 歐洲 ──
     en: YaYan_ASR_Global
     fr: YaYan_ASR_Global
     de: YaYan_ASR_Global
     ru: YaYan_ASR_Global
     es: YaYan_ASR_Global
-    # ── 東南亞（Whisper-large-v3）──
+    # ── 東南亞 ──
     th: YaYan_ASR_Global
     ms: YaYan_ASR_Global
     vi: YaYan_ASR_Global
     id: YaYan_ASR_Global
-    # ── 預設 ──
-    auto: YaYan_ASR_Mandarin
+    # 預設
+    auto: YaYan_ASR_Dialect
 
 llm:
   alias: YaYan_Reasoner
   backend: transformers
-  model_id: Qwen/Qwen3-14B          # ← 改
-  quantization: nf4                 # ← 從 awq 改 nf4（最關鍵）
+  model_id: "Qwen/Qwen3-14B"
+  quantization: nf4
   dtype: float16
   max_new_tokens: 1024
   max_model_len: 4096
@@ -72,7 +92,7 @@ llm:
   temperature: 0.6
   top_p: 0.9
   top_k: 20
-  repetition_penalty: 1.05  
+  repetition_penalty: 1.05
   gpu_memory_utilization: 0.85
   enforce_eager: true
   tensor_parallel_size: 1
@@ -80,9 +100,9 @@ llm:
   served_model_name: "YaYan_Reasoner"
 
 diarize:
-  enabled: false
+  enabled: true
   min_speakers: 1
-  max_speakers: 4
+  max_speakers: 5
 
 postprocess:
   use_opencc: true
