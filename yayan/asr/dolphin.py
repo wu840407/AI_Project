@@ -1,7 +1,6 @@
-"""YaYan_ASR_Dialect — Dolphin-CN-Dialect-Small 包裝。
+"""YaYan_ASR_Dialect — Dolphin-CN-Dialect 包裝。
 
-支援 22 種中文方言 + 字級時間戳。
-取代 v4.5 的 sensevoice.py + 舊版 dolphin-base。
+對應 Dolphin SDK 的 model(waveform, lang_sym, region_sym) API。
 """
 from __future__ import annotations
 
@@ -11,6 +10,7 @@ from dataclasses import dataclass
 from typing import List, Optional, Tuple
 
 import numpy as np
+import torch
 
 from ..config import CONFIG, model_path
 
@@ -18,34 +18,30 @@ logger = logging.getLogger("YaYan.ASR.Dolphin")
 
 _MODEL = None
 
-# routing key (default.yaml asr.routing) → Dolphin 的 (lang_sym, region_sym)
-# 22 方言 + 通用語言對應
 ROUTING_TO_DOLPHIN: dict = {
-    # 漢語方言（cmn 系列）
     "zh":    ("zh", "CN"),
     "cmn":   ("zh", "CN"),
-    "yue":   ("yue", "CN"),         # 粵語
-    "wuu":   ("wuu", "CN"),         # 吳語（含上海話）
-    "wuu-sz":("wuu", "CN-SZ"),      # 蘇州話
-    "wuu-nb":("wuu", "CN-NB"),      # 寧波話
-    "wuu-wz":("wuu", "CN-WZ"),      # 溫州話
-    "nan":   ("nan", "CN"),         # 閩南語 / 台語
-    "nan-cs":("nan", "CN-CS"),      # 潮汕話
-    "nan-hn":("nan", "CN-HN"),      # 海南話
-    "cdo":   ("cdo", "CN"),         # 閩東語 / 福州話
-    "hak":   ("hak", "CN"),         # 客家話
-    "hsn":   ("hsn", "CN"),         # 湘語 / 湖南話
-    "gan":   ("gan", "CN"),         # 贛語 / 江西話
-    "cjy":   ("cjy", "CN"),         # 晉語 / 山西話
-    "cmn-sw":("zh", "CN-SW"),       # 四川話 / 西南官話
-    "cmn-sd":("zh", "CN-SD"),       # 山東話
-    "cmn-ne":("zh", "CN-NE"),       # 東北話
-    "cmn-zy":("zh", "CN-ZY"),       # 河南話
-    "cmn-wh":("zh", "CN-WH"),       # 武漢話
-    "cmn-xa":("zh", "CN-XA"),       # 西安話
-    "cmn-lz":("zh", "CN-LZ"),       # 蘭州話
-    "cmn-jh":("zh", "CN-JH"),       # 南京話
-    # 中亞 / 藏維
+    "yue":   ("yue", "CN"),
+    "wuu":   ("wuu", "CN"),
+    "wuu-sz":("wuu", "CN-SZ"),
+    "wuu-nb":("wuu", "CN-NB"),
+    "wuu-wz":("wuu", "CN-WZ"),
+    "nan":   ("nan", "CN"),
+    "nan-cs":("nan", "CN-CS"),
+    "nan-hn":("nan", "CN-HN"),
+    "cdo":   ("cdo", "CN"),
+    "hak":   ("hak", "CN"),
+    "hsn":   ("hsn", "CN"),
+    "gan":   ("gan", "CN"),
+    "cjy":   ("cjy", "CN"),
+    "cmn-sw":("zh", "CN-SC"),       # ★ 西南官話 / 四川話 — 修正 region_sym
+    "cmn-sd":("zh", "CN-SD"),
+    "cmn-ne":("zh", "CN-NE"),
+    "cmn-zy":("zh", "CN-ZY"),
+    "cmn-wh":("zh", "CN-WH"),
+    "cmn-xa":("zh", "CN-XA"),
+    "cmn-lz":("zh", "CN-LZ"),
+    "cmn-jh":("zh", "CN-JH"),
     "bo":    ("bo", "CN"),
     "ug":    ("ug", "CN"),
 }
@@ -53,16 +49,15 @@ ROUTING_TO_DOLPHIN: dict = {
 
 @dataclass
 class WordTimestamp:
-    """字級時間戳記。"""
     word: str
-    start: float    # 相對於 chunk 開頭
+    start: float
     end: float
 
 
 @dataclass
 class DolphinResult:
     text: str
-    words: List[WordTimestamp]      # 可能為空（短段沒做 timestamp）
+    words: List[WordTimestamp]
     detected_lang: str = ""
     detected_region: str = ""
 
@@ -82,15 +77,22 @@ def _load():
     if not local_dir.exists():
         raise FileNotFoundError(f"YaYan_ASR_Dialect 不存在: {local_dir}")
 
-    logger.info(f"載入 YaYan_ASR_Dialect (Dolphin-CN-Dialect-Small) …")
     device = CONFIG["devices"]["asr_gpu"]
+    logger.info(f"載入 YaYan_ASR_Dialect ({local_dir.name}) on {device} …")
 
-    # dolphin.load_model 預設會去 HF 抓；給 model_dir 走本地
-    _MODEL = dolphin.load_model(
-        "small.cn",
-        model_dir=str(local_dir),
-        device=device,
-    )
+    # Dolphin SDK 簽名：load_model(model_name, model_dir, device)
+    # model_name 由本地檔名推斷（small.cn.pt → "small.cn"，small.pt → "small"）
+    pt_files = list(local_dir.glob("*.pt"))
+    if not pt_files:
+        raise FileNotFoundError(
+            f"{local_dir} 找不到 .pt 模型權重檔"
+        )
+    # 取最大的 .pt 檔當主模型（避免 optimizer.pt 之類）
+    pt_files.sort(key=lambda p: p.stat().st_size, reverse=True)
+    model_name = pt_files[0].stem  # e.g. "small.cn" or "small"
+    logger.info(f"使用 Dolphin model_name = {model_name}（檔案 {pt_files[0].name}）")
+
+    _MODEL = dolphin.load_model(model_name, str(local_dir), device)
     return _MODEL
 
 
@@ -101,61 +103,77 @@ def transcribe(
 ) -> DolphinResult:
     """執行 Dolphin ASR。
 
-    language_hint: 例如 "zh" / "yue" / "wuu" / "nan" / "cdo" / "auto"
+    audio: numpy float32 array (16kHz mono)
+    language_hint: 例如 "zh" / "yue" / "nan" / "cdo" / "auto"
     """
-    import dolphin as _dolphin_pkg
-
     model = _load()
 
     lang_sym, region_sym = ROUTING_TO_DOLPHIN.get(
         (language_hint or "auto").lower(), (None, None)
     )
 
+    # ★ numpy array → torch tensor（Dolphin SDK 內部需要）
+    if isinstance(audio, np.ndarray):
+        waveform = torch.from_numpy(audio).float()
+    else:
+        waveform = audio
+
+    # ★ Dolphin SDK 用 model(waveform, **kwargs) 直接呼叫
     kwargs = {}
     if lang_sym:
         kwargs["lang_sym"] = lang_sym
     if region_sym:
         kwargs["region_sym"] = region_sym
     if enable_word_timestamp:
-        kwargs["word_timestamp"] = True
+        # SDK 不同版本參數名不一樣，幾個都試
+        kwargs["predict_time"] = True
 
-    # Dolphin SDK 接受 numpy array 或路徑
     try:
-        result = _dolphin_pkg.transcribe(model, audio, **kwargs)
+        result = model(waveform, **kwargs)
     except TypeError:
-        # 老版 SDK 不支援 word_timestamp，降級
-        kwargs.pop("word_timestamp", None)
-        result = _dolphin_pkg.transcribe(model, audio, **kwargs)
+        # 舊版 SDK 不支援 predict_time，去掉重試
+        kwargs.pop("predict_time", None)
+        try:
+            result = model(waveform, **kwargs)
+        except Exception as e:
+            logger.error(f"Dolphin 推論失敗: {e}")
+            return DolphinResult(text="", words=[])
 
     text = (getattr(result, "text", "") or "").strip()
     text = _strip_special_tokens(text)
 
     # 嘗試抽 word timestamp
     words: List[WordTimestamp] = []
-    if hasattr(result, "words") and result.words:
-        for w in result.words:
+    raw_words = getattr(result, "words", None) or getattr(result, "tokens", None)
+    if raw_words:
+        for w in raw_words:
             try:
-                words.append(WordTimestamp(
-                    word=str(w.get("word", "")) if isinstance(w, dict) else str(w.word),
-                    start=float(w.get("start", 0)) if isinstance(w, dict) else float(w.start),
-                    end=float(w.get("end", 0)) if isinstance(w, dict) else float(w.end),
-                ))
+                if isinstance(w, dict):
+                    words.append(WordTimestamp(
+                        word=str(w.get("word", w.get("text", ""))),
+                        start=float(w.get("start", 0)),
+                        end=float(w.get("end", 0)),
+                    ))
+                else:
+                    words.append(WordTimestamp(
+                        word=str(getattr(w, "word", getattr(w, "text", ""))),
+                        start=float(getattr(w, "start", 0)),
+                        end=float(getattr(w, "end", 0)),
+                    ))
             except Exception:
                 continue
 
-    detected_lang = getattr(result, "language", "") or ""
+    detected_lang = getattr(result, "language", "") or getattr(result, "lang", "") or ""
     detected_region = getattr(result, "region", "") or ""
 
     return DolphinResult(
-        text=text,
-        words=words,
-        detected_lang=detected_lang,
-        detected_region=detected_region,
+        text=text, words=words,
+        detected_lang=str(detected_lang),
+        detected_region=str(detected_region),
     )
 
 
 def _strip_special_tokens(text: str) -> str:
-    """移除 <|...|> 或 <xx> 等特殊 token。"""
     text = re.sub(r"<\|[^|]*\|>", "", text)
-    text = re.sub(r"<[a-z]{2,4}>", "", text)
+    text = re.sub(r"<[a-z]{2,6}>", "", text)
     return text.strip()

@@ -115,3 +115,7 @@ def _whisper_transcribe(
         routing=routing,
         words=words,
     )
+
+# 向後相容
+AsrResult = ASRResult
+
