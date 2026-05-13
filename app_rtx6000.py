@@ -1,5 +1,5 @@
 """
-YaYan-AI v4.5 — Quadro RTX 6000 (Turing) x 2 主介面
+YaYan-AI v4.6 — Quadro RTX 6000 (Turing) x 2 主介面
 """
 from __future__ import annotations
 
@@ -7,16 +7,15 @@ import os
 import sys
 import json
 import logging
+import statistics
 from datetime import datetime
 from pathlib import Path
 
-# 必須在 import gradio / huggingface_hub 之前
 os.environ.setdefault("HF_HUB_OFFLINE", "1")
 os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
 os.environ.setdefault("HF_DATASETS_OFFLINE", "1")
 os.environ.setdefault("GRADIO_ANALYTICS_ENABLED", "False")
 os.environ.setdefault("GRADIO_DO_NOT_TRACK", "1")
-os.environ.setdefault("AWQ_USE_TRITON", "0")
 
 logging.basicConfig(
     level=logging.INFO,
@@ -36,15 +35,39 @@ from yayan.pipeline import (
 )
 
 
-# ---------------- 語言選單 ---------------- #
+# ★ v4.6: 22 中文方言全部展開
 DIALECT_TO_ROUTING = {
-    "🔍 自動偵測": "auto",
-    # ── 漢語系 ──
+    "🔍 自動偵測（建議：逐段 LID）": "auto",
+    "🇹🇼 國台混合 / 多方言混雜": "auto",
+    # ── 北方官話 ──
     "🇨🇳 北京話 / 普通話": "zh",
-    "🇨🇳 山東話": "zh",
+    "🇨🇳 東北話": "cmn-ne",
+    "🇨🇳 山東話": "cmn-sd",
+    "🇨🇳 河南話": "cmn-zy",
+    "🇨🇳 西安話": "cmn-xa",
+    "🇨🇳 蘭州話": "cmn-lz",
+    # ── 西南官話 ──
+    "🇨🇳 四川話 (西南官話)": "cmn-sw",
+    "🇨🇳 武漢話": "cmn-wh",
+    # ── 江淮官話 ──
+    "🇨🇳 南京話": "cmn-jh",
+    # ── 吳語 ──
     "🇨🇳 上海話 (吳語)": "wuu",
-    "🇨🇳 四川話": "zh",
+    "🇨🇳 蘇州話": "wuu-sz",
+    "🇨🇳 寧波話": "wuu-nb",
+    "🇨🇳 溫州話": "wuu-wz",
+    # ── 粵語 ──
     "🇭🇰 廣東話 (粵語)": "yue",
+    # ── 閩語 ──
+    "🇹🇼 閩南語 / 台語": "nan",
+    "🇨🇳 潮汕話 / 潮州話": "nan-cs",
+    "🇨🇳 海南話": "nan-hn",
+    "🇨🇳 福州話 (閩東語)": "cdo",
+    # ── 客贛湘晉 ──
+    "🇨🇳 客家話": "hak",
+    "🇨🇳 湖南話 (湘語)": "hsn",
+    "🇨🇳 江西話 (贛語)": "gan",
+    "🇨🇳 山西話 (晉語)": "cjy",
     # ── 中國少數民族 ──
     "🏔️ 藏語 (Tibetan)": "bo",
     "🌙 維吾爾語 (Uyghur)": "ug",
@@ -69,26 +92,102 @@ DIALECT_TO_ROUTING = {
     "🇮🇩 印尼語 (Indonesian)": "id",
 }
 DIALECT_CHOICES = list(DIALECT_TO_ROUTING.keys())
-ROUTING_TO_DIALECT = {v: k for k, v in DIALECT_TO_ROUTING.items()}
+
+ROUTING_DISPLAY = {
+    "zh": "普通話", "cmn": "普通話",
+    "cmn-ne": "東北話", "cmn-sd": "山東話", "cmn-zy": "河南話",
+    "cmn-xa": "西安話", "cmn-lz": "蘭州話",
+    "cmn-sw": "四川話", "cmn-wh": "武漢話", "cmn-jh": "南京話",
+    "yue": "粵語",
+    "wuu": "上海話", "wuu-sz": "蘇州話", "wuu-nb": "寧波話", "wuu-wz": "溫州話",
+    "nan": "閩南語/台語", "nan-cs": "潮汕話", "nan-hn": "海南話",
+    "cdo": "福州話",
+    "hak": "客家話", "hsn": "湘語", "gan": "贛語", "cjy": "晉語",
+    "bo": "藏語", "ug": "維吾爾語",
+    "ja": "日文", "ko": "韓文",
+    "fa": "波斯語", "ur": "烏爾都語", "ar": "阿拉伯語", "hi": "印地語",
+    "en": "英語", "fr": "法語", "de": "德語", "ru": "俄語", "es": "西班牙語",
+    "th": "泰語", "ms": "馬來語", "vi": "越南語", "id": "印尼語",
+    "auto": "未識別",
+}
 
 
-# ---------------- 業務邏輯 ---------------- #
+def _calc_confidence(result: TranscriptionResult) -> tuple[float, str]:
+    segments = result.segments
+    raw_text = result.raw_text or ""
+    translated = result.translated_text or ""
+    if not segments:
+        return 0.0, "無段落"
 
-def _calc_confidence(result: TranscriptionResult) -> float:
-    """估算識別精準度分數（0-100）。"""
-    score = 0.0
-    if result.segments:
-        score += 60.0
-        avg_dur = sum(s.end - s.start for s in result.segments) / len(result.segments)
-        if 1.0 <= avg_dur <= 15.0:
-            score += 20.0
-        elif 0.5 <= avg_dur <= 25.0:
-            score += 10.0
-    if result.routing and result.routing != "auto":
-        score += 10.0
-    if result.translated_text and result.translated_text.strip():
-        score += 10.0
-    return round(min(100.0, score), 1)
+    notes = []
+    score = 100.0
+    durations = [s.end - s.start for s in segments]
+    total_dur = sum(durations)
+
+    if total_dur > 0:
+        seg_per_min = len(segments) / (total_dur / 60)
+        if seg_per_min > 80:
+            score -= 15; notes.append("VAD 切片過密")
+        elif seg_per_min < 5:
+            score -= 10; notes.append("VAD 切片過疏")
+
+    avg_dur = statistics.mean(durations)
+    if avg_dur < 0.8:
+        score -= 15; notes.append("段落過短")
+    elif avg_dur > 20:
+        score -= 10; notes.append("段落過長")
+
+    if len(durations) > 1:
+        std = statistics.stdev(durations)
+        cv = std / avg_dur if avg_dur > 0 else 0
+        if cv > 1.5:
+            score -= 10; notes.append("段長不穩")
+
+    seg_texts = [s.raw_text.strip() for s in segments if s.raw_text.strip()]
+    if seg_texts:
+        unique_ratio = len(set(seg_texts)) / len(seg_texts)
+        if unique_ratio < 0.6:
+            score -= 20; notes.append("ASR 重複嚴重")
+        elif unique_ratio < 0.8:
+            score -= 10; notes.append("ASR 些許重複")
+
+    if raw_text and translated:
+        ratio = len(translated) / max(len(raw_text), 1)
+        if ratio < 0.5:
+            score -= 15; notes.append("譯文偏短")
+        elif ratio > 2.0:
+            score -= 10; notes.append("譯文偏長")
+    elif raw_text and not translated:
+        score -= 30; notes.append("LLM 翻譯失敗")
+
+    lid_confs = [s.lid_conf for s in segments if s.lid_conf > 0]
+    if lid_confs:
+        avg_lid = statistics.mean(lid_confs)
+        if avg_lid < 0.4:
+            score -= 15; notes.append(f"LID 信心低({avg_lid:.2f})")
+        elif avg_lid < 0.5:
+            score -= 5; notes.append(f"LID 信心中({avg_lid:.2f})")
+    
+    fallback_count = sum(1 for s in segments if s.lid_method in ("fallback", "lid_error"))
+    if segments and fallback_count / len(segments) > 0.3:
+        score -= 10
+        notes.append(f"LID 失敗段過多")
+
+    score = max(0.0, min(100.0, score))
+    note_text = "、".join(notes) if notes else "品質良好"
+    return round(score, 1), note_text
+
+
+def _format_lang_breakdown(breakdown: dict) -> str:
+    if not breakdown:
+        return ""
+    parts = []
+    total = sum(breakdown.values())
+    for code, count in sorted(breakdown.items(), key=lambda x: -x[1])[:5]:
+        name = ROUTING_DISPLAY.get(code, code)
+        pct = count / total * 100
+        parts.append(f"{name} {count}({pct:.0f}%)")
+    return "｜".join(parts)
 
 
 def fn_transcribe(audio_path, dialect_label, enable_diarize):
@@ -106,10 +205,14 @@ def fn_transcribe(audio_path, dialect_label, enable_diarize):
         logging.exception("transcribe 失敗")
         return f"識別失敗：{e}", "", "", "", "—"
 
-    detected = ROUTING_TO_DIALECT.get(result.routing, result.routing)
-    info = f"偵測語言：{detected}（{result.routing}）｜段數：{len(result.segments)}"
-    confidence = _calc_confidence(result)
-    score_text = f"{confidence:.1f} / 100"
+    breakdown_text = _format_lang_breakdown(result.language_breakdown)
+    n_speakers = len(set(s.speaker for s in result.segments)) if result.segments else 0
+    info = (
+        f"📊 語言分布：{breakdown_text}\n"
+        f"👥 說話人：{n_speakers} 位｜段數：{len(result.segments)}"
+    )
+    confidence, note = _calc_confidence(result)
+    score_text = f"{confidence:.1f} / 100\n{note}"
     return info, result.raw_text, result.raw_text, result.translated_text, score_text
 
 
@@ -130,7 +233,6 @@ def fn_refine(raw_text_original, edited_text, dialect_label):
 
 
 def fn_save_as(translated_text, source_audio):
-    """產生下載檔；前端會跳『另存新檔』對話框。"""
     if not translated_text or not translated_text.strip():
         return None
     out_dir = Path(CONFIG["paths"]["output_dir"])
@@ -142,16 +244,15 @@ def fn_save_as(translated_text, source_audio):
     return str(out)
 
 
-# ---------------- Gradio 介面 ---------------- #
-
 CSS = """
 .yayan-title { font-size: 1.5em; font-weight: 600; }
 .yayan-sub   { color: #888; font-size: 0.9em; }
 .confidence-box textarea {
     text-align: center !important;
-    font-size: 1.6em !important;
+    font-size: 1.4em !important;
     font-weight: 700 !important;
     color: #2563eb !important;
+    line-height: 1.3 !important;
 }
 """
 
@@ -161,7 +262,7 @@ def build_ui() -> gr.Blocks:
         gr.Markdown(
             f"""
             # 🏺 YaYan-AI **v{__version__}**　— 多語言情報系統
-            <p class="yayan-sub">Edition: RTX6000-Server　|　ASR: SenseVoice / Dolphin / Whisper-large-v3　|　LLM: Qwen3-32B-AWQ</p>
+            <p class="yayan-sub">Edition: RTX6000-Server　|　ASR: Dolphin-CN-Dialect (22 方言) / Whisper-large-v3　|　LLM: Qwen3-14B + NF4　|　逐段 LID + 5 人說話人分離 + 字級時間戳</p>
             """
         )
 
@@ -174,40 +275,40 @@ def build_ui() -> gr.Blocks:
                 )
                 dialect = gr.Dropdown(
                     choices=DIALECT_CHOICES,
-                    value="🔍 自動偵測",
-                    label="來源語言（建議用自動偵測）",
+                    value="🔍 自動偵測（建議：逐段 LID）",
+                    label="來源語言",
                 )
                 enable_diarize = gr.Checkbox(
-                    label="啟用說話人分離（雙人通話建議）",
-                    value=False,
+                    label="啟用說話人分離（A方/B方/C方/D方/E方）",
+                    value=True,
                 )
                 transcribe_btn = gr.Button("🚀 開始轉錄翻譯", variant="primary", size="lg")
-                info_box = gr.Textbox(label="識別資訊", interactive=False, lines=2)
+                info_box = gr.Textbox(label="識別資訊", interactive=False, lines=3)
 
-                # ★ 左下角：精準度分數
                 confidence_box = gr.Textbox(
-                    label="🎯 識別精準度分數",
+                    label="🎯 識別精準度",
                     value="—",
                     interactive=False,
+                    lines=2,
                     elem_classes=["confidence-box"],
                 )
 
             with gr.Column(scale=2):
-                gr.Markdown("### 📜 識別原文（可編輯）")
+                gr.Markdown("### 📜 識別原文（可編輯，含時間戳）")
                 raw_text_display = gr.State("")
                 raw_text_box = gr.Textbox(
                     label="ASR 原文",
-                    lines=6,
+                    lines=10,
                     interactive=True,
-                    placeholder="識別結果會顯示在此處，您可直接修改後按「依編輯重新潤飾」。",
+                    placeholder="格式：[A方 00:01-00:05] 你好",
                 )
 
                 gr.Markdown("### 🇹🇼 台灣正體中文譯文（可編輯）")
                 translated_box = gr.Textbox(
                     label="譯文",
-                    lines=8,
+                    lines=10,
                     interactive=True,
-                    placeholder="翻譯結果會顯示在此處，您可直接修改後按「依編輯重新潤飾」。",
+                    placeholder="翻譯結果會保留 [A方 00:01-00:05] 標籤",
                 )
 
                 with gr.Row():
@@ -220,25 +321,21 @@ def build_ui() -> gr.Blocks:
                     interactive=False,
                 )
 
-        # ---------- 事件 ---------- #
         transcribe_btn.click(
             fn=fn_transcribe,
             inputs=[audio_input, dialect, enable_diarize],
             outputs=[info_box, raw_text_display, raw_text_box, translated_box, confidence_box],
         )
-
         refine_raw_btn.click(
             fn=fn_refine,
             inputs=[raw_text_display, raw_text_box, dialect],
             outputs=[translated_box],
         )
-
         refine_translated_btn.click(
             fn=fn_refine,
             inputs=[raw_text_display, translated_box, dialect],
             outputs=[translated_box],
         )
-
         save_btn.click(
             fn=fn_save_as,
             inputs=[translated_box, audio_input],
@@ -248,13 +345,16 @@ def build_ui() -> gr.Blocks:
         gr.Markdown(
             """
             ---
-            **使用提示：**
-            1. 上傳音檔 → 點「開始轉錄翻譯」 → 取得原文與譯文。
-            2. 若 ASR 有錯，**直接在「ASR 原文」框修改** → 點「依編輯後原文重新翻譯潤飾」。
-            3. 若譯文要微調，**直接在「譯文」框修改** → 點「依編輯後譯文重新潤飾」。
-            4. 滿意後按「另存新檔」，可選擇儲存位置（瀏覽器原生對話框）。
+            **v4.6 新功能：**
+            - **22 種中文方言**：含福州話、客家話、湘贛晉、潮汕、海南、蘇杭吳語細分等
+            - **字級時間戳**：每段顯示 `[A方 00:01-00:05] 內容`
+            - **逐段語言識別**：混合語音每段獨立判斷
+            - **5 人說話人分離**：A方 / B方 / C方 / D方 / E方
+            - **語言分布統計**：左上顯示音檔內各語言比例
 
-            **支援語言：** 漢語方言 9 種、藏維 2 種、東亞 2 種、中東南亞 4 種、歐洲 5 種、東南亞 4 種，共 26 種。
+            **ASR 引擎：**
+            - 漢語方言（22 種） + 藏維 → **Dolphin-CN-Dialect-Small**（清華 + DataoceanAI）
+            - 日韓 + 歐洲 + 中東 + 東南亞 → **Whisper-large-v3**
             """
         )
     return demo
@@ -267,14 +367,14 @@ def main():
     print(f"  Models root: {CONFIG['paths']['models_root']}")
     print(f"  ASR GPU: {CONFIG['devices']['asr_gpu']}  |  LLM GPU: {CONFIG['devices']['llm_gpu']}")
     print(f"  LLM backend: {CONFIG['llm'].get('backend')}  |  quant: {CONFIG['llm'].get('quantization')}")
-    print(f"  支援語言數: {len(DIALECT_TO_ROUTING)}")
+    print(f"  支援語言/方言數: {len(DIALECT_TO_ROUTING)}")
     print("=" * 60)
 
     print("⏳ 預載模型 …")
     try:
         warmup()
     except Exception as e:
-        print(f"⚠️ Warmup 失敗（仍可啟動，將在首次請求時載入）：{e}")
+        print(f"⚠️ Warmup 失敗（仍可啟動）：{e}")
 
     demo = build_ui()
     demo.queue(default_concurrency_limit=2).launch(
