@@ -28,56 +28,48 @@ asr:
   enable_diarize: true
   default_alias: YaYan_ASR_Dialect
   routing:
-    # ── 漢語方言 → Dolphin-CN-Dialect ──
     zh: YaYan_ASR_Dialect
     cmn: YaYan_ASR_Dialect
-    cmn-ne: YaYan_ASR_Dialect    # 東北話
-    cmn-sd: YaYan_ASR_Dialect    # 山東話
-    cmn-zy: YaYan_ASR_Dialect    # 河南話
-    cmn-xa: YaYan_ASR_Dialect    # 西安話
-    cmn-lz: YaYan_ASR_Dialect    # 蘭州話
-    cmn-sw: YaYan_ASR_Dialect    # 四川話
-    cmn-wh: YaYan_ASR_Dialect    # 武漢話
-    cmn-jh: YaYan_ASR_Dialect    # 南京話
-    yue: YaYan_ASR_Dialect       # 粵語
-    wuu: YaYan_ASR_Dialect       # 吳語
-    wuu-sz: YaYan_ASR_Dialect    # 蘇州話
-    wuu-nb: YaYan_ASR_Dialect    # 寧波話
-    wuu-wz: YaYan_ASR_Dialect    # 溫州話
-    nan: YaYan_ASR_Dialect       # 閩南語
-    nan-cs: YaYan_ASR_Dialect    # 潮汕話
-    nan-hn: YaYan_ASR_Dialect    # 海南話
-    cdo: YaYan_ASR_Dialect       # 福州話
-    hak: YaYan_ASR_Dialect       # 客家話
-    hsn: YaYan_ASR_Dialect       # 湘語
-    gan: YaYan_ASR_Dialect       # 贛語
-    cjy: YaYan_ASR_Dialect       # 晉語
-    # 別名
+    cmn-ne: YaYan_ASR_Dialect
+    cmn-sd: YaYan_ASR_Dialect
+    cmn-zy: YaYan_ASR_Dialect
+    cmn-xa: YaYan_ASR_Dialect
+    cmn-lz: YaYan_ASR_Dialect
+    cmn-sw: YaYan_ASR_Dialect
+    cmn-wh: YaYan_ASR_Dialect
+    cmn-jh: YaYan_ASR_Dialect
+    yue: YaYan_ASR_Dialect
+    wuu: YaYan_ASR_Dialect
+    wuu-sz: YaYan_ASR_Dialect
+    wuu-nb: YaYan_ASR_Dialect
+    wuu-wz: YaYan_ASR_Dialect
+    nan: YaYan_ASR_Dialect
+    nan-cs: YaYan_ASR_Dialect
+    nan-hn: YaYan_ASR_Dialect
+    cdo: YaYan_ASR_Dialect
+    hak: YaYan_ASR_Dialect
+    hsn: YaYan_ASR_Dialect
+    gan: YaYan_ASR_Dialect
+    cjy: YaYan_ASR_Dialect
     min: YaYan_ASR_Dialect
     hokkien: YaYan_ASR_Dialect
-    # ── 藏維 ──
     bo: YaYan_ASR_Dialect
     ug: YaYan_ASR_Dialect
-    # ── 日韓 → Whisper（在日韓上更強） ──
     ja: YaYan_ASR_Global
     ko: YaYan_ASR_Global
-    # ── 中東/南亞 ──
     fa: YaYan_ASR_Global
     ur: YaYan_ASR_Global
     ar: YaYan_ASR_Global
     hi: YaYan_ASR_Global
-    # ── 歐洲 ──
     en: YaYan_ASR_Global
     fr: YaYan_ASR_Global
     de: YaYan_ASR_Global
     ru: YaYan_ASR_Global
     es: YaYan_ASR_Global
-    # ── 東南亞 ──
     th: YaYan_ASR_Global
     ms: YaYan_ASR_Global
     vi: YaYan_ASR_Global
     id: YaYan_ASR_Global
-    # 預設
     auto: YaYan_ASR_Dialect
 
 llm:
@@ -86,8 +78,8 @@ llm:
   model_id: "Qwen/Qwen3-14B"
   quantization: nf4
   dtype: float16
-  max_new_tokens: 1024
-  max_model_len: 4096
+  max_new_tokens: 2048           # ★ 從 1024 提到 2048（每批 30 行夠用，且不會慢太多）
+  max_model_len: 8192            # ★ 從 4096 提到 8192
   do_sample: true
   temperature: 0.6
   top_p: 0.9

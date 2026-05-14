@@ -1,11 +1,4 @@
-"""YaYan-AI v4.6 端到端流程。
-
-v4.6 改進：
-  - ASR 升級到 Dolphin-CN-Dialect-Small（22 方言）
-  - 永遠逐段做 LID
-  - 字級/段級時間戳，輸出格式：[A方 00:01-00:05] 你好
-  - 說話人標籤 A/B/C/D/E（最多 5 人）
-"""
+"""YaYan-AI v4.6 端到端流程（含分批翻譯）。"""
 from __future__ import annotations
 
 import logging
@@ -22,6 +15,7 @@ from .llm import LlmClient, to_taiwan_traditional
 logger = logging.getLogger("YaYan.Pipeline")
 
 SPEAKER_LABELS = ["A", "B", "C", "D", "E"]
+TRANSLATE_BATCH_LINES = 30   # ★ 每批翻譯 30 行（防 LLM 截斷）
 
 
 @dataclass
@@ -119,7 +113,6 @@ def _label_speaker_at(
 
 
 def _fmt_time(sec: float) -> str:
-    """1.23 → '00:01' / 65.4 → '01:05' / 3661 → '1:01:01'"""
     sec = int(round(sec))
     h, remain = divmod(sec, 3600)
     m, s = divmod(remain, 60)
@@ -150,6 +143,41 @@ def _vote_routing(
     return weighted.most_common(1)[0][0]
 
 
+def _batched_translate(
+    text_lines: List[str],
+    source_language: str,
+    batch_size: int = TRANSLATE_BATCH_LINES,
+) -> str:
+    """把長文字分批送 LLM，避免單次 max_new_tokens 截斷。"""
+    if not text_lines:
+        return ""
+
+    llm = _get_llm()
+    translated_chunks: List[str] = []
+
+    n_batches = (len(text_lines) + batch_size - 1) // batch_size
+    logger.info(f"LLM 分批翻譯：{len(text_lines)} 行 → {n_batches} 批，每批 {batch_size} 行")
+
+    for batch_idx in range(n_batches):
+        start = batch_idx * batch_size
+        end = min(start + batch_size, len(text_lines))
+        chunk_lines = text_lines[start:end]
+        chunk_text = "\n".join(chunk_lines)
+
+        try:
+            result = llm.translate(chunk_text, source_language=source_language)
+            translated_chunks.append(result.strip())
+            logger.info(
+                f"  批 {batch_idx + 1}/{n_batches}: "
+                f"{len(chunk_text)} 字 → {len(result)} 字"
+            )
+        except Exception as e:
+            logger.exception(f"批 {batch_idx + 1} 翻譯失敗，回退原文: {e}")
+            translated_chunks.append(chunk_text)
+
+    return "\n".join(translated_chunks)
+
+
 def transcribe_audio(
     audio_path: str,
     language: str = "auto",
@@ -172,8 +200,7 @@ def transcribe_audio(
         )
 
     user_hint = language
-    
-    # ---- VAD ----
+
     if use_vad:
         from . import vad
         try:
@@ -184,7 +211,6 @@ def transcribe_audio(
     else:
         chunks = [(0.0, len(audio) / sr, audio)]
 
-    # ---- Diarization ----
     raw_speakers: List[Tuple[float, float, str]] = []
     speaker_mapping: Dict[str, str] = {}
     if use_diarize:
@@ -199,7 +225,6 @@ def transcribe_audio(
         except Exception as e:
             logger.warning(f"Diarization 失敗，略過: {e}")
 
-    # ---- 逐段 LID ----
     from . import lid as _lid_mod
     enable_lid = asr_cfg["enable_lid"]
     seg_routings: List[Tuple[str, float, str]] = []
@@ -224,7 +249,6 @@ def transcribe_audio(
     else:
         seg_routings = [(user_hint, 1.0, "user_hint")] * len(chunks)
 
-    # ---- 補齊 auto 段（鄰近投票）----
     fallback_routing = user_hint if user_hint != "auto" else "zh"
     for i, (rt, conf, method) in enumerate(seg_routings):
         if rt != "auto":
@@ -239,7 +263,6 @@ def transcribe_audio(
         seg_routings[i] = (voted, 0.0,
                           "neighbor_vote" if voted != fallback_routing else "fallback")
 
-    # ---- 同說話人連貫性 ----
     if use_diarize and raw_speakers:
         last_speaker = None
         last_routing = None
@@ -254,7 +277,6 @@ def transcribe_audio(
                 last_speaker = speaker
                 last_routing = current_routing
 
-    # ---- 執行 ASR ----
     from .asr import transcribe as asr_transcribe
 
     segments: List[Segment] = []
@@ -265,7 +287,7 @@ def transcribe_audio(
         try:
             r = asr_transcribe(
                 chunk, routing=routing, language_hint=routing,
-                chunk_start_sec=start,  # 給 word timestamp 用
+                chunk_start_sec=start,
             )
         except Exception as e:
             logger.error(f"ASR 失敗 [{start:.1f}s-{end:.1f}s] routing={routing}: {e}")
@@ -288,15 +310,14 @@ def transcribe_audio(
             ))
             lang_counter[routing] += 1
 
-    # ---- 統計 ----
     if lang_counter:
         dominant_lang = lang_counter.most_common(1)[0][0]
     else:
         dominant_lang = user_hint if user_hint != "auto" else "zh"
     logger.info(f"語言分布: {dict(lang_counter)} | 主要: {dominant_lang}")
 
-    # ---- 組合 raw_text（v4.6 新格式：[A方 00:01-00:05] 內容）----
-    raw_text_lines = []
+    # 組合 raw_text（含時間戳）
+    raw_text_lines: List[str] = []
     for s in segments:
         t1 = _fmt_time(s.start)
         t2 = _fmt_time(s.end)
@@ -307,18 +328,19 @@ def transcribe_audio(
         raw_text_lines.append(f"{prefix} {s.raw_text}")
     raw_text = "\n".join(raw_text_lines).strip()
 
-    # ---- LLM 翻譯 ----
+    # ★ LLM 翻譯改用分批
     translated = ""
-    if raw_text:
+    if raw_text_lines:
         try:
-            llm = _get_llm()
             lang_summary = ", ".join(f"{k}({v}段)" for k, v in lang_counter.most_common(3))
-            translated = llm.translate(
-                raw_text,
-                source_language=f"{dominant_lang} (混合: {lang_summary})",
+            source_desc = f"{dominant_lang} (混合: {lang_summary})"
+            translated = _batched_translate(
+                raw_text_lines,
+                source_language=source_desc,
+                batch_size=TRANSLATE_BATCH_LINES,
             )
         except Exception as e:
-            logger.exception(f"LLM 翻譯失敗: {e}")
+            logger.exception(f"LLM 分批翻譯失敗，回退原文: {e}")
             translated = raw_text
         translated = to_taiwan_traditional(translated)
 
@@ -340,6 +362,16 @@ def refine_with_user_edit(
         return ""
     raw_text = (raw_text or user_edit).strip()
     user_edit = user_edit.strip()
+
+    # refine 也要分批（如果輸入很長）
+    lines = user_edit.split("\n")
+    if len(lines) > TRANSLATE_BATCH_LINES * 2:
+        logger.info(f"refine 輸入 {len(lines)} 行，分批處理")
+        translated = _batched_translate(
+            lines, source_language=source_language,
+            batch_size=TRANSLATE_BATCH_LINES,
+        )
+        return to_taiwan_traditional(translated)
 
     try:
         llm = _get_llm()
